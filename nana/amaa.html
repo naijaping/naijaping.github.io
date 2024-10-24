@@ -5,7 +5,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>TATA IPL Hindi - iStreamFlare</title>
+  <title>Sky Sports - iStreamFlare</title>
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://willsmithgranzer.github.io/istreamtv/jw.js"></script>
@@ -79,9 +79,13 @@
 <div id="jwplayerDiv"></div>   
 <script type="text/javascript">   
 jwplayer("jwplayerDiv").setup({   
-        file: "http://54.39.106.158:8080/KIDS_MOVIE1/index.m3u8",   
-      type: "m3u8",   
-   
+        file: "https://linear007-gb-dash1-prd-cf.cdn.skycdp.com/016a/Content/DASH_003_720_120/Live/channel(skysportscricket)/manifest_720-120.mpd",   
+      type: "dash",   
+      drm: { "clearkey": {   
+              "keyId": "00056d5c8882917a4463d5b42ba86c31",   
+              "key": "226c39dd7d41b6f0e27cb7d8940f644f"   
+            }   
+             }   
 });   
 </script>
 <script>  
