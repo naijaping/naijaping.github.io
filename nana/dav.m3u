@@ -453,6 +453,9 @@ https://live.rte.ie/live/a/channel3/channel3.isml/channel3.mpd
 #KODIPROP:inputstream.adaptive.license_key=3a3c1d1cb88ea5a8a38528d0b9702390:a4c4e53270616bc2c88c5edce8fd4474
 https://live.rte.ie/live/a/channel4/channel4.isml/manifest.mpd
 
+#EXTINF:-1 group-title="UK Local"tvg-id="CNNHD.uk"tvg-name="CNN HD",CNN HD
+http://154.58.225.26:4022/udp/239.250.26.8:1234?m3u8
+
 #EXTINF:-1 tvg-logo="https://cdn.technadu.com/wp-content/uploads/2021/05/USA-Network-Logotype.jpg", tvg-id="ksport1hd" group-title="#🇺🇸 USA Sport 🇺🇸#", USA Network (East)
 #KODIPROP:inputstreamaddon=inputstream.adaptive
 #KODIPROP:inputstream.adaptive.manifest_type=dash
