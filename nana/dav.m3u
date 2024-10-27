@@ -490,27 +490,34 @@ https://cfrt.stream.peacocktv.com/Content/CMAF_OL1-CTR-4s/Live/channel(usa-west)
 https://linear013-gb-dash1-prd-ak.cdn.skycdp.com/Content/DASH_003_720_30/Live/channel(skycrime)/manifest_720.mpd
 
 
-#EXTINF:-1 group-title="SPORTS" tvg-id="Fox Soccer Plus" tvg-logo="https://i.ibb.co/rbSp3Dd/foxsoccerplus.png", FOX SOCCER PLUS 🇺🇸
-#KODIPROP:inputstreamaddon=inputstream.adaptive
-#KODIPROP:inputstream.adaptive.manifest_type=dash
+#EXTINF:-1 group-title="SPORTS" tvg-id="TSN1 HD" tvg-logo="https://i.ibb.co/HYzgFbZ/tsn1.png", TSN 1 🇨🇦
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36
 #KODIPROP:inputstream.adaptive.license_type=clearkey
-#KODIPROP:inputstream.adaptive.license_key=260465aba18e40329932d47e9c7aa20b:2b79020e3f3ddc94ba84943ba72d898c
-https://cors-proxy.elfsight.com/https://linear.stvacdn.spectrum.com/LIVE/1143/dash/cenc/FSCPLHD/manifest.mpd?
+#KODIPROP:inputstream.adaptive.license_key=dea83ced0141424e983e1afe463b4b0d:c00dd5dd17b0799aa4013f365a1393ce
+https://live-ctv.video.9c9media.com/f/TSN/TSN1/manifest.mpd
 
-
-#EXTINF:-1 group-title="SPORTS" tvg-id="Fox Sports 1 HDTV" tvg-logo="https://i.ibb.co/JWYjRrF/fs1.png", FOX SPORTS 1 🇺🇸
-#KODIPROP:inputstreamaddon=inputstream.adaptive
-#KODIPROP:inputstream.adaptive.manifest_type=dash
+#EXTINF:-1 group-title="SPORTS" tvg-id="TSN2 HD" tvg-logo="https://i.ibb.co/5r1nzp5/tsn2.png", TSN 2 🇨🇦
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36
 #KODIPROP:inputstream.adaptive.license_type=clearkey
-#KODIPROP:inputstream.adaptive.license_key=4aa03f4ba0b54774accf43d15af7be70:843a421b633ae576f7ad62872d0d71b1
-https://cors-proxy.elfsight.com/https://linear-novi.stvacdn.spectrum.com/LIVE/1166/dash/cenc/SPEEDHD/manifest.mpd
+#KODIPROP:inputstream.adaptive.license_key=ddc52c88e2c24d38a5bc8dda8a2acb61:ad5ea485464a13eec7dda3249c556446
+https://live-ctv.video.9c9media.com/f/TSN/TSN2/manifest.mpd
 
-
-#EXTINF:-1 group-title="SPORTS" tvg-id="Fox Sports 2" tvg-logo="https://i.ibb.co/pwRPZLw/fs2.png", FOX SPORTS 2 🇺🇸
-#KODIPROP:inputstreamaddon=inputstream.adaptive
-#KODIPROP:inputstream.adaptive.manifest_type=dash
+#EXTINF:-1 group-title="SPORTS" tvg-id="TSN3 HD" tvg-logo="https://i.ibb.co/r6FWmrW/tsn3.png", TSN 3 🇨🇦
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36
 #KODIPROP:inputstream.adaptive.license_type=clearkey
-#KODIPROP:inputstream.adaptive.license_key=426b95e246774cb798a8c845fe6333d6:91e511fd8c290134b28c36ee1c386ea9
-https://cors-proxy.elfsight.com/https://linear-novi.stvacdn.spectrum.com/LIVE/1108/dash/cenc/FS2HD_00564/manifest.mpd
+#KODIPROP:inputstream.adaptive.license_key=c0f378ad54e14a9c85a3d8c986d2a51f:5e1d040743ff78715e464ffb905e68a9
+https://live-ctv.video.9c9media.com/f/TSN/TSN3/manifest.mpd
+
+#EXTINF:-1 group-title="SPORTS" tvg-id="TSN4 HD" tvg-logo="https://i.ibb.co/PxGj1GQ/tsn4.png", TSN 4 🇨🇦
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36
+#KODIPROP:inputstream.adaptive.license_type=clearkey
+#KODIPROP:inputstream.adaptive.license_key=f0a2efd11e0643c3a45d6f67d02f1a97:85bf4469003bd28f01ea4fefedd5a431
+https://live-ctv.video.9c9media.com/f/TSN/TSN4/manifest.mpd
+
+#EXTINF:-1 group-title="SPORTS" tvg-id="TSN5 HD" tvg-logo="https://i.ibb.co/F4dfsDM/tsn5.png", TSN 5 🇨🇦
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36
+#KODIPROP:inputstream.adaptive.license_type=clearkey
+#KODIPROP:inputstream.adaptive.license_key=cb57741a1cee422690c6294a06eb1320:7a0cfd493df6ef7cc0d0bb3ad95cec8c
+https://live-ctv.video.9c9media.com/f/TSN/TSN5/manifest.mpd
 
 
