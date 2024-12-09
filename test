@@ -71,3 +71,161 @@ button_card_templates:
                   [fill: "[[[ return entity.state === 'on' ? '#616161' : '#9da0a2'; ]]]", 
                   top: 20%, left: 10.7%, width: 3.5vw]
             **# template: ['base', 'loader']**
+
+
+
+
+# Modified from examples found here: https://community.home-assistant.io/t/wled-script-to-alternate-between-effects-every-5-minutes/227553/39
+# List of all effects: https://github.com/Aircoookie/WLED/wiki/List-of-effects-and-palettes
+alias: WLED Cycle Random Effects
+description: Sets WLED to random effect from list on interval while WLED remains on.
+trigger:
+  - platform: device
+    type: turned_on
+    device_id: 94b3087d775f6f1a48286fc1e0230d6a # update to match device_id
+    entity_id: light.wled # update to match entity_id
+    domain: light
+  - platform: time_pattern
+    seconds: '/20'
+condition:
+  - condition: device
+    type: is_on
+    device_id: 94b3087d775f6f1a48286fc1e0230d6a # update to match device_id
+    entity_id: light.wled # update to match entity_id
+    domain: light
+action:
+  - service: light.turn_on
+    data:
+      effect: '{{ effects | random }}'
+    entity_id: light.wled
+  - service: number.set_value
+    target:
+      entity_id: number.wled_intensity
+    data:
+      value: '196'
+  - service: number.set_value
+    target:
+      entity_id: number.wled_speed
+    data:
+      value: '184'
+variables:
+  effects:
+    #- Solid               #   0 -   Solid primary color on all LEDs
+    #- Blink               #   1 -   Blinks between primary and secondary color
+    - Breathe             #   2 -   Fades between primary and secondary color
+    - Wipe                #   3 -   Switches between primary and secondary, switching LEDs one by one, start to end
+    - Wipe Random         #   4 -   Same as Wipe, but uses random colors
+    - Random Colors       #   5 -   Applies a new random color to all LEDs
+    - Sweep               #   6 -   Switches between primary and secondary, switching LEDs one by one, start to end to start
+    - Dynamic             #   7 -   Sets each LED to a random color     127: Set single LED 128 255: Set all LEDs
+    - Colorloop           #   8 -   Cycle all LEDs through the rainbow colors       127: Pastel colors 128  255: Saturated colors
+    - Rainbow             #   9 -   Displays rainbow colors along the whole strip
+    - Scan                #  10 -  A single primary colored light wanders between start and end
+    - Dual Scan           #  11 -  Same as Scan but uses two lights starting at both ends
+    - Fade                #  12 -  Fades smoothly between primary and secondary color
+    - Theater             #  13 -  Pattern of one lit and two unlit LEDs running
+    - Theater Rainbow     #  14 -  Same as Theater but uses colors of the rainbow
+    - Running             #  15 -  Sine Waves scrolling
+    - Saw                 #  16 -  Sawtooth Waves scrolling
+    - Twinkle             #  17 -  Random LEDs light up in the primary color with secondary as background, turns all off
+    - Dissolve            #  18 -  Fills LEDs with primary in random order, then off again
+    - Dissolve Rnd        #  19 -  Fills LEDs with random colors in random order, then off again
+    - Sparkle             #  20 -  Single random LEDs light up in the primary color for a short time, secondary is background
+    - Sparkle Dark        #  21 -  All LEDs are lit in the primary color, single random LEDs turn off for a short time
+    - Sparkle+            #  22 -  All LEDs are lit in the primary color, multiple random LEDs turn off for a short time
+    - Strobe              #  23 -  All LEDs are lit in the secondary color, all LEDs flash in a single short burst in primary color
+    - Strobe Rainbow      #  24 -  Same as strobe, cycles through the rainbow
+    - Strobe Mega         #  25 -  All LEDs are lit in the secondary color, all LEDs flash in several short bursts in primary color
+    - Blink Rainbow       #  26 -  Same as blink, cycles through the rainbow
+    - Android             #  27 -  Section of varying length running
+    - Chase               #  28 -  2 LEDs in primary color running on secondary
+    - Chase Random        #  29 -  Like Chase but leaves trail of random color
+    - Chase Rainbow       #  30 -  Like 28 but leaves trail of rainbow
+    - Chase Flash         #  31 -  2 LEDs flash in secondary color while the rest is lit in primary. The flashing LEDs wander from start to end
+    - Chase Flash Rnd     #  32 -  Like Chase Flash, but the 2 LEDs flash in random colors and leaves a random color behind
+    - Rainbow Runner      #  33 -  Like Chase, but the 2 LEDs light up in rainbow colors and leave a primary color trail
+    - Colorful            #  34 -  Shifting Red        Green   Blue pattern    0   127: Pastel colors 128  255: Saturated colors
+    - Traffic Light       #  35 -  Emulates a traffic light
+    - Sweep Random        #  36 -  Like Sweep, but uses random colors
+    - Running 2           #  37 -  Pattern of n LEDs primary and n LEDs secondary moves along the strip
+    - Aurora              #  38 -  Simulation of the Aurora Borealis
+    - Stream              #  39 -  Flush bands random hues along the string
+    - Scanner             #  40 -  Dot moves between ends, leaving behing a fading trail
+    - Lighthouse          #  41 -  Dot moves from start to end, leaving behing a fading trail
+    - Fireworks           #  42 -  Random color blobs light up, then fade again
+    - Rain                #  43 -  Like Fireworks, but the blobs move
+    - Merry Christmas     #  44 -  Running 2, but always uses red and green
+    - Fire Flicker        #  45 -  LEDs randomly flickering
+    - Gradient            #  46 -  Moves a saturation gradient of the primary color along the strip
+    - Loading             #  47 -  Moves a sawtooth pattern along the strip
+    - Police              #  48 -  A red and a blue dot running
+    - Police All          #  49 -  Two areas, one red and one blue, sweeping
+    - Two Dots            #  50 -  Like Police, but with custom colors
+    - Two Areas           #  51 -  Like Police All, but with custom colors
+    - Circus              #  52 -  Pattern of secondary, red and white
+    - Halloween           #  53 -  Running 2, but always uses orange and purple
+    - Tri Chase           #  54 -  Like Chase, but with 3 colors
+    - Tri Wipe            #  55 -  Like Wipe but turns LEDs off as "third color"
+    - Tri Fade            #  56 -  Fades the whole strip from primary color to secondary color to off
+    - Lightning           #  57 -  Short random white strobe similar to a lightning bolt
+    - ICU                 #  58 -  Two "eyes" running on opposite sides of the strip
+    - Multi Comet         #  59 -  Like Scanner, but creates multiple trails
+    - Scanner Dual        #  60 -  Like Scanner, but with two dots running on opposite sides
+    - Stream 2            #  61 -  Flush random hues along the string
+    - Oscillate           #  62 -  Areas of primary and secondary colors move between opposite ends, combining colors where they touch
+    - Pride 2015          #  63 -  Rainbow cycling with brightness variation
+    - Juggle              #  64 -  Eight colored dots running, leaving trails
+    - Palette             #  65 -  Running color palette
+    - Fire 2012           #  66 -  Simulates flickering fire in red and yellow
+    - Colorwaves          #  67 -  Like Pride 2015, but uses palettes
+    - BPM                 #  68 -  Pulses moving back and forth on palette
+    - Fill Noise          #  69 -  Noise pattern
+    - Noise 1             #  70 -  Fast Noise shift pattern
+    - Noise 2             #  71 -  Fast Noise shift pattern
+    - Noise 3             #  72 -  Noise shift pattern
+    - Noise 4             #  73 -  Noise sparkle pattern
+    - Colortwinkles       #  74 -  LEDs light up randomly in random colors and fade off again
+    - Lake                #  75 -  Calm palette waving
+    - Meteor              #  76 -  The primary color creates a trail of randomly decaying color
+    - Meteor Smooth       #  77 -  Smoothly animated meteor
+    - Railway             #  78 -  Shows primary and secondary color on alternating LEDs. All LEDs fade to their opposite color and back again
+    - Ripple              #  79 -  Effect resembling random water ripples
+    - Twinklefox          #  80 -  FastLED gentle twinkling with slow fade in/out
+    - Twinklecat          #  81 -  Twinkling with fast in / slow out
+    - Halloween Eyes      #  82 -  One Pair of blinking eyes at random intervals along strip
+    - Solid Pattern       #  83 -  Speed sets number of LEDs on, intensity sets off
+    - Solid Pattern Tri   #  84 -  Solid Pattern with three colors
+    - Spots               #  85 -  Solid lights with even distance
+    - Spots Fade          #  86 -  Spots, getting bigger and smaller
+    - Glitter             #  87 -  Rainbow with white sparkles
+    - Candle              #  88 -  Flicker resembling a candle flame
+    - Fireworks Starburst #  89 -  Exploding multicolor fireworks
+    - Fireworks 1D        #  90 -  one dimension fireworks with flare
+    - Bouncing Balls      #  91 -  Bouncing ball effect
+    - Sinelon             #  92 -  Fastled sinusoidal moving eye
+    - Sinelon Dual        #  93 -  Sinelon from both directions
+    - Sinelon Rainbow     #  94 -  Sinelon in rainbow colours
+    - Popcorn             #  95 -  popping kernels
+    - Drip                #  96 -  Water dripping effect
+    - Plasma              #  97 -  Plasma lamp
+    - Percent             #  98 -  Lights up a percentage of segment
+    - Ripple Rainbow      #  99 -  Like ripple, but with a dimly lit changing background
+    - Heartbeat           # 100 - led strip pulsing rhythm similar to a heart beat
+    - Pacifica            # 101 - Gentle, blue        Intensity of waves
+    - Candle Multi        # 102 - Like candle effect, but each LED has it's own flicker pattern
+    - Solid Glitter       # 103 - Like Glitter, but with solid color background
+    - Sunrise             # 104 - Simulates a gradual sunrise or sunset. Speed sets:           0         60: sunrise time in minutes, 61     120: sunset time in minutes     60, above: "breathing" rise and set    Sun intensity
+    - Phased              # 105 - Sine waves (in sourcecode)
+    - TwinkleUp           # 106 - Twinkle effect with fade        Amount of Twinkles
+    - Noise Pal           # 107 - Peaceful noise that's slow and with gradually changing palettes
+    - Sine                # 108 - Controllable sine waves
+    - Phased Noise        # 109 - Noisy sine waves
+    - Flow                # 110 - Blend of palette and spot effects
+    - Chunchun            # 111 - Birds flying in a circle formation
+    - Dancing Shadows     # 112 - Moving spotlights
+    - Washing machine     # 113 - Alternating direction (in source)
+    - Candy Cane          # 114 - Running 2 in Red & White
+    - Blends              # 115 - Blends random colors across palette
+    - TV Simulator        # 116 - TV light spill simulation
+    - Dynamic Smooth      # 117 - Link Dynamic but with smooth palette blends
+mode: single
