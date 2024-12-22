@@ -229,3 +229,32 @@ variables:
     - TV Simulator        # 116 - TV light spill simulation
     - Dynamic Smooth      # 117 - Link Dynamic but with smooth palette blends
 mode: single
+
+
+
+
+
+* * * * * * * * * * * * * * * * * *
+            *                                 *
+            *             PERSON              *
+            *                                 *
+            * * * * * * * * * * * * * * * * * */
+
+            else if (domain === 'person') {
+                let time = c => {
+                    let s = (c/1e3),
+                        m = (c/6e4),
+                        h = (c/36e5),
+                        d = (c/864e5);
+                    return s < 60
+                        ? parseInt(s) + 's'
+                        : m < 60 ? parseInt(m) + 'm'
+                        : h < 24 ? parseInt(h) + 'h'
+                        : parseInt(d) + 'd';
+                };
+                let input = states[variables.retain] === undefined || states[variables.retain].state === 'unavailable'
+                        ? time(Date.now() - Date.parse(entity.last_changed))
+                        : time(Date.now() - Date.parse(states[variables.retain].state)),
+                    unit = ' ';
+                return circle(state, input, unit);
+            }
