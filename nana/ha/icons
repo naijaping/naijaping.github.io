@@ -1,0 +1,10 @@
+kettle
+
+[[[ const state = entity.state === 'on' ? 'animate' : null; 
+return `<svg viewBox="0 0 50 50"><style>@keyframes animate{0%{transform: scale(0.85);}20%{transform: scale(1.1);}40%{transform: scale(0.95);}60%{transform: scale(1.03);}80%{transform: scale(0.97);}}.animate{animation: animate 0.8s; transform-origin: center;}</style>
+  <g fill="var(--button-card-light-color-no-temperature)">
+  <path d="M0 16.6h13.7v25.6H0zm0 0"/>
+  <path d="M50 40.2v-4.8c0-4.5-3.7-8.3-8.3-8.3h-4.1v-7.4H17.9l4 6.8v3.2a7.8 7.8 0 002 15.4H0V50h50v-4.9H35.7a7.8 7.8 0 003-15h3c3 0 5.4 2.4 5.4 5.3v4.8zM34.7 29.5h-9.8v-2h9.8zm0 0M39.8 7.4a1 1 0 100 2 1 1 0 000-2zm0 0"/>
+  <path d="M39.7 0H0v13.7h50v-3.4C50 4.6 45.4 0 39.7 0zm.1 12.3a4 4 0 110-7.8 4 4 0 010 7.8zm0 0"/>
+  </g>
+</svg>`;]]]
