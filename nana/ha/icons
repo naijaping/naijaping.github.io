@@ -91,3 +91,19 @@ icon_washer:
             </svg>
           `;
         ]]]
+
+       Garage
+     [[[
+          if (variables.state === 'on') {
+            return `
+              <svg viewBox="0 0 50 50">
+                <path d="M37.4 15.3V34H34V18.7H6.8V34H3.4V15.3L20.4 8.5 37.4 15.3M32.3 20.4H8.5V23.8H32.3V20.4Z" fill="#9da0a2" />
+              </svg>
+            `;
+          } 
+            return `
+              <svg viewBox="0 0 50 50">
+                <path d="M37.4 15.3V34H34V18.7H6.8V34H3.4V15.3L20.4 8.5 37.4 15.3M32.3 20.4H8.5V23.8H32.3V20.4M32.3 30.6H8.5V34H32.3V30.6M32.3 25.5H8.5V28.9H32.3V25.5Z" fill="#9da0a2" />
+              </svg>
+            `;
+        ]]]
