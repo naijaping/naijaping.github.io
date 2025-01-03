@@ -194,3 +194,292 @@ icon_climate:
             `;
           }
         ]]]
+
+
+
+
+template:
+  - sensor:
+    - unique_id: washer
+      name: >
+        {{ states.sensor.washer.attributes.friendly_name }}
+      state: >
+        {%- if states.sensor.washer.state == "off" -%}
+          {% set time_diff = as_timestamp(now()) - as_timestamp(states.sensor.washer.last_changed) %}
+          {% set time_diff_minutes = time_diff/60 %}
+          {% set time_diff_hours = time_diff_minutes/60 %}
+          {% set time_diff_days = time_diff_hours/24 %}
+          {% if time_diff_minutes <= 59 %}
+            {{ time_diff_minutes | round(0) }} min{% if time_diff_minutes > 1 %}s{% endif %} ago
+          {% elif time_diff_minutes > 59 and time_diff_minutes < 1440 %}
+            {{ time_diff_hours | round(0) }} hour{% if time_diff_hours > 1 %}s{% endif %} ago
+          {% else %}
+            {{ time_diff_days | round(0) }} day{% if time_diff_days > 1 %}s{% endif %} ago
+          {% endif %}
+        {%- elif states.sensor.washer.state == "on" -%}
+         {{ states.sensor.washer.attributes.run_state }}
+        {%- endif -%}
+      attributes:
+        remain_time: >
+          {% set h, m, s = states.sensor.washer.attributes.remain_time.split(":") %}
+          {{ ((h | int * 60) + (m | int) + (s | int) / 60) | round() }}
+        initial_time: >
+          {% set h, m, s = states.sensor.washer.attributes.initial_time.split(":") %}
+          {{ ((h | int * 60) + (m | int) + (s | int) / 60) | round() }}
+  - sensor:
+    - unique_id: dryer
+      name: >
+        {{ states.sensor.dryer.attributes.friendly_name }}
+      state: >
+        {% if states.sensor.dryer.state == "off" %}
+          {% set time_diff = as_timestamp(now()) - as_timestamp(states.sensor.dryer.last_changed) %}
+          {% set time_diff_minutes = time_diff/60 %}
+          {% set time_diff_hours = time_diff_minutes/60 %}
+          {% set time_diff_days = time_diff_hours/24 %}
+          {% if time_diff_minutes <= 59 %}
+            {{ time_diff_minutes | round(0) }} min{% if time_diff_minutes > 1 %}s{% endif %} ago
+          {% elif time_diff_minutes > 59 and time_diff_minutes < 1440 %}
+            {{ time_diff_hours | round(0) }} hour{% if time_diff_hours > 1 %}s{% endif %} ago
+          {% else %}
+            {{ time_diff_days | round(0) }} day{% if time_diff_days > 1 %}s{% endif %} ago
+          {% endif %}
+        {% elif states.sensor.dryer.state == "on" %}
+         {{ states.sensor.dryer.attributes.run_state }}
+        {% endif %}
+      attributes:
+        remain_time: >
+          {% set h, m, s = states.sensor.dryer.attributes.remain_time.split(":") %}
+          {{ ((h | int * 60) + (m | int) + (s | int) / 60) | round() }}
+        initial_time: >
+          {% set h, m, s = states.sensor.dryer.attributes.initial_time.split(":") %}
+          {{ ((h | int * 60) + (m | int) + (s | int) / 60) | round() }}
+
+
+
+washing machine 
+- type: custom:button-card
+  entity: sensor.template_washer
+  tap_action:
+    !include popup/laundry.yaml
+  template:
+    - base
+    - icon_washer
+    - circle
+  variables:
+    state_on: >
+      [[[ return ['Detecting', 'Washing', 'Rinsing', 'Spinning'].indexOf(!entity || entity.state) !== -1; ]]]
+    circle_input: >
+      [[[
+        if (entity) {
+          let initial_time = entity.attributes.initial_time,
+              remain_time = entity.attributes.remain_time,
+              percent = (remain_time / initial_time) * 100,
+              result = Math.round(percent);
+          return ['Detecting', 'Washing', 'Rinsing', 'Spinning'].includes(entity.state) ? result : 'NA';
+        }
+      ]]]
+    circle_input_unit: 'm'
+    circle_text: >
+      [[[
+      if (entity) {
+          let remain_time = entity.attributes.remain_time;
+          return ['Detecting', 'Washing', 'Rinsing', 'Spinning'].includes(entity.state) ? remain_time : 'NA';
+        }
+      ]]]
+  card_mod:
+    style: |
+      #circle {
+        {%- if states.sensor.template_washer.attributes.remain_time == 0 -%}
+          display:none !important;
+        {% endif %}
+      }
+
+- type: custom:button-card
+  entity: sensor.template_dryer
+  tap_action:
+    !include popup/laundry.yaml
+  template:
+    - base
+    - icon_dryer
+    - circle
+  variables:
+    state_on: >
+      [[[ return ['Detecting', 'Drying', 'Cooling'].indexOf(!entity || entity.state) !== -1; ]]]
+    circle_input: >
+      [[[
+        if (entity) {
+          let initial_time = entity.attributes.initial_time,
+              remain_time = entity.attributes.remain_time,
+              percent = (remain_time / initial_time) * 100,
+              result = Math.round(percent);
+          return ['Detecting', 'Drying', 'Cooling'].includes(entity.state) ? result : 'NA';
+        }
+      ]]]
+    circle_input_unit: 'm'
+    circle_text: >
+      [[[
+      if (entity) {
+          let remain_time = entity.attributes.remain_time;
+          return ['Detecting', 'Drying', 'Cooling'].includes(entity.state) ? remain_time : 'NA';
+        }
+      ]]]
+  card_mod:
+    style: |
+      #circle {
+        {%- if states.sensor.template_dryer.attributes.remain_time == 0 -%}
+          display:none !important;
+        {% endif %}
+      }
+
+
+
+icon_washer:
+  styles:
+    custom_fields:
+      icon:
+        - width: 78%
+        - margin-left: -6%
+  custom_fields:
+    icon: >
+      [[[
+        let center = `
+          <path d="M31.8,23.1c3.8,3.8,3.8,9.8,0,13.6c-3.8,3.8-9.8,3.8-13.6,0L31.8,23.1"/>
+          <path fill="none" d="M25,15.4c-8,0-14.4,6.4-14.4,14.4S17,44.3,25,44.3s14.4-6.4,14.4-14.4S33,15.4,25,15.4z"/>
+        `,
+        base = `
+          <path fill="#9da0a2" d="M10.6,1.1h28.7c2.6,0,4.8,2.1,4.8,4.8v38.4c0,2.6-2.1,4.8-4.8,4.8H10.6c-2.6,0-4.8-2.1-4.8-4.8V5.8C5.8,3.2,8,1.1,10.6,1.1 M13.1,5.8c-1.4,0-2.4,1.1-2.4,2.4c0,1.4,1.1,2.4,2.4,2.4s2.4-1.1,2.4-2.4S14.3,5.8,13.1,5.8 M20.2,5.8c-1.4,0-2.4,1.1-2.4,2.4 c0,1.4,1.1,2.4,2.4,2.4c1.4,0,2.4-1.1,2.4-2.4S21.5,5.8,20.2,5.8 M25,15.4c-8,0-14.4,6.4-14.4,14.4S17,44.3,25,44.3 s14.4-6.4,14.4-14.4S33,15.4,25,15.4z"/>
+        `,
+        style = `
+          <svg viewBox="0 0 50 50">
+            <style>
+              @keyframes rotate {
+                0% {
+                  visibility: visible;
+                  transform: rotate(0deg) translateZ(0);
+                }
+                100% {
+                  transform: rotate(720deg) translateZ(0);
+                }
+              }
+              .start {
+                animation: rotate 2.8s ease-in;
+                transform-origin: center 60%;
+                fill: #5daeea;
+                visibility: hidden;
+                will-change: transform;
+              }
+              .on {
+                animation: rotate 1.8s linear infinite;
+                transform-origin: center 60%;
+                fill: #5daeea;
+                animation-delay: 2.8s;
+                visibility: hidden;
+                will-change: transform;
+              }
+              .end {
+                animation: rotate 2.8s;
+                transform-origin: center 60%;
+                fill: #9ca2a5;
+                animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+                will-change: transform;
+              }
+              .start_timeout {
+                animation: rotate 1.8s linear infinite;
+                transform-origin: center 60%;
+                fill: #5daeea;
+                visibility: hidden;
+                will-change: transform;
+              }
+              .end_timeout {
+                fill: #9ca2a5;
+              }
+            </style>
+        `;
+        if (variables.state_on) {
+          return `${style}${base}<g class="start">${center}</g><g class="on">${center}</g></svg>`;
+        }
+        if (!variables.state_on) {
+          return `${style}${base}<g class="end">${center}</g></svg>`;
+        }
+        if (variables.state_on && variables.timeout > 2000) {
+          return `${style}${base}<g class="start_timeout">${center}</g></svg>`;
+        } else {
+          return `${style}${base}<g class="end_timeout">${center}</g></svg>`;
+        }
+      ]]]
+
+icon_dryer:
+  styles:
+    custom_fields:
+      icon:
+        - width: 78%
+        - margin-left: -6%
+  custom_fields:
+    icon: >
+      [[[
+        let center = `
+          <path d="M15.7,21.5h4.6c-0.6,3.3,0,5.2,1.4,6.7c2.6,2.5,3.8,5.8,3.1,10.1h-4.6c0.6-3.3,0-5.2-1.4-6.7 C16.2,28.9,15.1,25.7,15.7,21.5"/>
+        	<path d="M25.3,21.5h4.6c-0.6,3.3,0,5.2,1.4,6.7c2.6,2.5,3.8,5.8,3.1,10.1h-4.6c0.6-3.3,0-5.2-1.4-6.7 C25.8,28.9,24.6,25.7,25.3,21.5z"/>
+        	<path fill="none" d="M25,15.4c-8,0-14.4,6.4-14.4,14.4S17,44.3,25,44.3s14.4-6.4,14.4-14.4S33,15.4,25,15.4"/>
+        `,
+        base = `
+          <path fill="#9da0a2" d="M10.6,1.1h28.7c2.6,0,4.8,2.1,4.8,4.8v38.4c0,2.6-2.1,4.8-4.8,4.8H10.6c-2.6,0-4.8-2.1-4.8-4.8V5.8C5.8,3.2,8,1.1,10.6,1.1 M13.1,5.8c-1.4,0-2.4,1.1-2.4,2.4c0,1.4,1.1,2.4,2.4,2.4s2.4-1.1,2.4-2.4S14.3,5.8,13.1,5.8 M20.2,5.8c-1.4,0-2.4,1.1-2.4,2.4 c0,1.4,1.1,2.4,2.4,2.4c1.4,0,2.4-1.1,2.4-2.4S21.5,5.8,20.2,5.8 M25,15.4c-8,0-14.4,6.4-14.4,14.4S17,44.3,25,44.3 s14.4-6.4,14.4-14.4S33,15.4,25,15.4"/>
+        `,
+        style = `
+          <svg viewBox="0 0 50 50">
+            <style>
+              @keyframes rotate {
+                0% {
+                  visibility: visible;
+                  transform: rotate(0deg) translateZ(0);
+                }
+                100% {
+                  transform: rotate(720deg) translateZ(0);
+                }
+              }
+              .start {
+                animation: rotate 2.8s ease-in;
+                transform-origin: center 60%;
+                fill: #5daeea;
+                visibility: hidden;
+                will-change: transform;
+              }
+              .on {
+                animation: rotate 1.8s linear infinite;
+                transform-origin: center 60%;
+                fill: #5daeea;
+                animation-delay: 2.8s;
+                visibility: hidden;
+                will-change: transform;
+              }
+              .end {
+                animation: rotate 2.8s;
+                transform-origin: center 60%;
+                fill: #9ca2a5;
+                animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+                will-change: transform;
+              }
+              .start_timeout {
+                animation: rotate 1.8s linear infinite;
+                transform-origin: center 60%;
+                fill: #5daeea;
+                visibility: hidden;
+                will-change: transform;
+              }
+              .end_timeout {
+                fill: #9ca2a5;
+              }
+            </style>
+        `;
+        if (variables.state_on) {
+          return `${style}${base}<g class="start">${center}</g><g class="on">${center}</g></svg>`;
+        }
+        if (!variables.state_on) {
+          return `${style}${base}<g class="end">${center}</g></svg>`;
+        }
+        if (variables.state_on && variables.timeout > 2000) {
+          return `${style}${base}<g class="start_timeout">${center}</g></svg>`;
+        } else {
+          return `${style}${base}<g class="end_timeout">${center}</g></svg>`;
+        }
+      ]]]
