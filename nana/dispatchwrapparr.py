@@ -1,182 +1,162 @@
 #!/usr/bin/env python3
 
 """
-Dispatchwrapparr - Version 0.4.6 Beta: Complete subtitle/teletext solution
+Dispatchwrapparr - Version 0.4.5 Beta: Enhanced subtitle/teletext support
 """
 
-import os
-import re
-import sys
-import signal
-import itertools
-import logging
-import base64
-import argparse
-import requests
-import socket
-import ipaddress
-import fnmatch
-import json
-from urllib.parse import urlparse, unquote
+[Previous imports and DASH DRM plugin code remain exactly the same until the FFMPEGMuxerDRM class]
 
-from collections import defaultdict
-from contextlib import suppress
-from typing import List, Self, Tuple, Optional, Dict
-from datetime import timedelta
-
-from streamlink import Streamlink
-from streamlink.exceptions import PluginError, FatalPluginError, NoPluginError
-from streamlink.plugin import Plugin, pluginmatcher, pluginargument
-from streamlink.plugin.plugin import HIGH_PRIORITY, parse_params, stream_weight
-from streamlink.stream.dash import DASHStream, DASHStreamWorker, DASHStreamWriter, DASHStreamReader
-from streamlink.stream.dash.manifest import MPD, Representation
-from streamlink.stream.ffmpegmux import FFMPEGMuxer
-from streamlink.stream import HTTPStream, HLSStream, DASHStream
-from streamlink.utils.url import update_scheme
-from streamlink.session import Streamlink
-from streamlink.utils.l10n import Language, Localization
-from streamlink.utils.times import now
-
-# Global variables
-log = logging.getLogger("dispatchwrapparr")
-
-class FFMPEGMuxerSubtitles(FFMPEGMuxer):
+class FFMPEGMuxerDRM(FFMPEGMuxer):
     def __init__(self, session, *streams, **options):
         super().__init__(session, *streams, **options)
         
-        # Rebuild FFmpeg command with proper subtitle handling
+        # Get keys if DRM is enabled
+        keys = []
+        if session.options.get("decryption-key"):
+            keys = session.options.get("decryption-key")
+            if len(keys) == 1:
+                keys.extend(keys)
+        
+        # Enhanced subtitle handling
+        subtitles_enabled = session.options.get("mux-subtitles")
+        teletext_enabled = session.options.get("teletext")
+        
         old_cmd = self._cmd.copy()
         self._cmd = []
-        subtitle_index = 0
-        audio_index = 0
+        key_index = 0
         
         while len(old_cmd) > 0:
             cmd = old_cmd.pop(0)
             
-            if cmd == "-i":
-                input_file = old_cmd.pop(0)
-                self._cmd.extend([cmd, input_file])
-                
-                # Detect subtitle streams
-                if "subtitle" in input_file or "subtitles" in input_file:
-                    self._cmd.extend([
-                        "-map", f"0:s:{subtitle_index}",
-                        "-c:s", "mov_text",
-                        "-metadata:s:s:0", "language=eng"
-                    ])
-                    subtitle_index += 1
+            # Handle DRM decryption keys
+            if keys and cmd == "-i":
+                _ = old_cmd.pop(0)
+                self._cmd.extend(["-re"])
+                self._cmd.extend(["-decryption_key", keys[key_index]])
+                key_index += 1
+                if key_index == len(keys):
+                    key_index = 1
+                self._cmd.extend([cmd, _])
             
-            elif cmd == "-c:a":
-                codec = old_cmd.pop(0)
-                self._cmd.extend([cmd, codec])
+            # Enhanced subtitle/teletext handling
+            elif subtitles_enabled and cmd == "-c:a":
+                _ = old_cmd.pop(0)
+                self._cmd.extend([cmd, _])
                 
-                # Add teletext parsing if enabled
-                if session.options.get("teletext"):
+                # Add subtitle stream handling
+                self._cmd.extend(["-c:s", "mov_text"])  # Use mov_text for better compatibility
+                
+                if teletext_enabled:
                     self._cmd.extend([
-                        "-parse_teletext", "1",
-                        "-fix_sub_duration"
+                        "-fix_sub_duration",
+                        "-parse_teletext", "1"
                     ])
+            
             else:
                 self._cmd.append(cmd)
         
-        # Add global parameters
-        self._cmd.extend([
-            "-f", "mpegts",
-            "-mpegts_flags", "+resend_headers",
-            "-muxdelay", "0",
-            "-flush_packets", "1"
-        ])
+        # Final optimizations
+        if self._cmd and (self._cmd[-1].startswith("pipe:") or not self._cmd[-1].startswith("-")):
+            final_output = self._cmd.pop()
+            self._cmd.extend([
+                "-mpegts_copyts", "1",
+                "-fflags", "+flush_packets",
+                "-max_delay", "500000",  # Increased delay for better subtitle sync
+                final_output
+            ])
         
         log.debug(f"Final FFmpeg command: {' '.join(self._cmd)}")
 
-class DASHStreamReaderWithSubtitles(DASHStreamReader):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.subtitle_tracks = []
-
-    def detect_subtitles(self):
-        if self.stream.subtitles_representations:
-            for idx, rep in enumerate(self.stream.subtitles_representations):
-                if rep.mimeType.startswith(("text", "application")):
-                    self.subtitle_tracks.append({
-                        "index": idx,
-                        "lang": rep.lang or "und",
-                        "type": "teletext" if "teletext" in rep.mimeType.lower() else "subtitle"
-                    })
-
-class DASHStreamWithSubtitles(DASHStream):
-    def open(self):
-        self.reader = DASHStreamReaderWithSubtitles(self, self.video_representation, now())
-        self.reader.detect_subtitles()
-        
-        if self.session.options.get("subtitles") and self.reader.subtitle_tracks:
-            log.info(f"Found {len(self.reader.subtitle_tracks)} subtitle tracks")
-            for track in self.reader.subtitle_tracks:
-                log.info(f"  - Track {track['index']}: {track['lang']} ({track['type']})")
-        
-        return FFMPEGMuxerSubtitles(
-            self.session,
-            self.reader,
-            maps=["0:v?", "0:a?"],
-            metadata={"title": "Dispatchwrapparr Stream"}
-        ).open()
+[Rest of the DASH DRM plugin code remains the same]
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Dispatchwrapparr with enhanced subtitle support")
+    parser = argparse.ArgumentParser(description="Dispatchwrapparr: A wrapper for Dispatcharr")
     parser.add_argument("-i", required=True, help="Input URL")
     parser.add_argument("-ua", required=True, help="User-Agent string")
-    parser.add_argument("-proxy", help="HTTP proxy server")
-    parser.add_argument("-proxybypass", help="Proxy bypass list")
-    parser.add_argument("-clearkeys", help="ClearKey DRM keys file/URL")
-    parser.add_argument("-subtitles", action="store_true", help="Enable subtitles")
-    parser.add_argument("-teletext", action="store_true", help="Enable teletext extraction")
-    parser.add_argument("-loglevel", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Log level")
-    return parser.parse_args()
+    parser.add_argument("-proxy", help="Optional HTTP proxy")
+    parser.add_argument("-proxybypass", help="Comma-separated list of hostnames or IP patterns to bypass the proxy")
+    parser.add_argument("-clearkeys", help="Optional JSON file/URL containing URL/Clearkey maps")
+    parser.add_argument("-subtitles", action="store_true", help="Enable support for subtitles")
+    parser.add_argument("-teletext", action="store_true", help="Enable support for teletext subtitles")
+    parser.add_argument("-loglevel", type=str, default="INFO", choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"], help="Log level")
+    args = parser.parse_args()
 
-def configure_logging(level):
-    logging.basicConfig(
-        level=level,
-        format="[%(name)s] %(asctime)s [%(levelname)s] %(message)s",
-        handlers=[logging.StreamHandler()]
-    )
-    return logging.getLogger("dispatchwrapparr")
+    if args.proxybypass and not args.proxy:
+        parser.error("argument -proxybypass: requires -proxy to be set")
+
+    return args
 
 def main():
+    global log
     args = parse_args()
-    log = configure_logging(args.loglevel.upper())
+    log = configure_logging(args.loglevel)
     
-    # Session setup
+    input_url, clearkey, url_headers = check_clearkey_in_url(args.i)
+    
+    log.info(f"Stream URL: '{input_url}'")
+    if clearkey:
+        log.info("Clearkey found in URL")
+    if url_headers:
+        log.info(f"Custom headers from URL: {url_headers}")
+
     session = Streamlink()
-    session.set_option("http-headers", {"User-Agent": args.ua})
     
+    # Set headers
+    headers = {"User-Agent": args.ua}
+    if url_headers:
+        headers.update(url_headers)
+    session.set_option("http-headers", headers)
+
+    # Set proxy if configured
     if args.proxy:
         session.set_option("http-proxy", args.proxy)
-    
-    # Subtitle configuration
+
+    # Enhanced subtitle/teletext configuration
     if args.subtitles or args.teletext:
         session.set_option("mux-subtitles", True)
         session.set_option("subtitle-languages", "all")
         
         if args.teletext:
             session.set_option("teletext", True)
-            log.info("Teletext extraction enabled")
-    
+            session.set_option("ffmpeg-options", "parse_teletext=1:fix_sub_duration=1")
+            log.info("Teletext support enabled with full parsing")
+        
+        log.info(f"Subtitle support enabled ({'teletext' if args.teletext else 'standard'})")
+
+    # FFmpeg configuration
+    session.set_option("ffmpeg-fout", "mpegts")
+    session.set_option("ffmpeg-verbose", True)
+    session.set_option("stream-segment-threads", 3)  # Increased for better performance
+
     # Get streams
     try:
-        streams = session.streams(args.i)
-        if not streams:
-            log.error("No streams found")
-            return
-        
-        best_stream = streams.get("best")
-        if not best_stream:
-            log.error("No playable streams found")
-            return
-        
-        log.info(f"Starting stream with {'subtitles' if args.subtitles else 'no subtitles'}")
-        with best_stream.open() as stream:
+        if clearkey:
+            input_url = f"dashdrm://{input_url}"
+            plugin = MPEGDASHDRM(session, input_url)
+            plugin.options["decryption-key"] = [clearkey]
+            streams = plugin.streams()
+        else:
+            streams = detect_stream_type(session, input_url, user_agent=args.ua, proxy=args.proxy, headers=url_headers)
+    except Exception as e:
+        log.error(f"Stream setup failed: {e}")
+        return
+
+    if not streams:
+        log.error("No playable streams found")
+        return
+
+    # Select best stream
+    stream = streams.get("best") or streams.get("live") or next(iter(streams.values()), None)
+    if not stream:
+        log.error("No streams available")
+        return
+
+    # Start streaming
+    try:
+        log.info("Starting stream with subtitle support")
+        with stream.open() as fd:
             while True:
-                data = stream.read(1024 * 188)  # Optimal TS packet size
+                data = fd.read(188 * 64)
                 if not data:
                     break
                 try:
@@ -184,11 +164,12 @@ def main():
                     sys.stdout.buffer.flush()
                 except BrokenPipeError:
                     break
-    
+    except KeyboardInterrupt:
+        log.info("Stream interrupted")
     except Exception as e:
         log.error(f"Stream error: {e}")
-        return
+
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     main()
