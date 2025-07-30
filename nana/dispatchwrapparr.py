@@ -1,27 +1,18 @@
 #!/usr/bin/env python3
 
 """
-
-Dispatchwrapparr - Version 0.4.1 Beta: A wrapper for Dispatcharr that supports the following:
+Dispatchwrapparr - Version 0.4.4 Beta: A wrapper for Dispatcharr that supports the following:
 
   - M3U8/DASH-MPD best stream selection, segment download handling and piping to ffmpeg
   - DASH-MPD DRM clearkey support
   - HTTP Proxy Support
   - Support for Youtube Livestreams and many others
   - Extended MIME-type stream detection for Streamlink
+  - URL header parameters support (#headers=origin&referer)
+  - Enhanced Teletext/Subtitle support with FFmpeg
 
 Usage: dispatchwrapper.py -i <URL> -ua <User Agent String>
-Optional: -proxy <Proxy Server> -subtitles -loglevel <Level>
-
-DRM/Clearkey Encrypted streams must be fed with #clearkey=<clearkey> at the end of the
-url string, or supply dispatcharr a custom m3u8 file formatted like the following Channel 4 UK example:
-
----------------------------------------------------- channel-4.m3u8 ------------------------------------------------------
-#EXTM3U
-#EXTINF:-1 group-title="United Kingdom",Channel 4
-https://olsp.live.dash.c4assets.com/dash_iso_sp_tl/live/channel(c4)/manifest.mpd#clearkey=5ce85f1aa5771900b952f0ba58857d7a
--------------------------------------------------------------------------------------------------------------------------
-
+Optional: -proxy <proxy server> -proxybypass <proxy bypass list> -clearkeys <file/url> -loglevel <level> -subtitles
 """
 
 from __future__ import annotations
@@ -39,11 +30,11 @@ import socket
 import ipaddress
 import fnmatch
 import json
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 from collections import defaultdict
 from contextlib import suppress
-from typing import List, Self, Tuple, Optional
+from typing import List, Self, Tuple, Optional, Dict
 from datetime import timedelta
 
 from streamlink import Streamlink
@@ -61,7 +52,6 @@ from streamlink.utils.times import now
 
 # Global variables
 log = logging.getLogger("dispatchwrapparr")
-
 
 """
 Begin DASH DRM Plugin
@@ -165,25 +155,12 @@ class FFMPEGMuxerDRM(FFMPEGMuxer):
     '''
     Inherit and extend the FFMPEGMuxer class to pass decryption keys
     to ffmpeg
-
-    We build a list of keys to use based on the value of command line option
-    --dashdrm-decryption-keys. If only 1 key is given, it's used for
-    all streams. If more than 1 key is given, the first key is used for
-    video, and the remaining keys used for remaining streams. If the number
-    of keys given is less than the number of streams, keys are looped
-    starting from the first key after the video key. This will basically
-    mean if you have a key for video, and a key for the rest of the streams
-    you just need to specify 2 keys, but alternatively you can provide a
-    different key for every single stream if needed
     '''
-
     @classmethod
     def _get_keys(cls, session):
         keys=[]
         if session.options.get("decryption-key"):
             keys = session.options.get("decryption-key")
-            # If only 1 key is given, then we use that also for all remaining
-            # streams
             if len(keys) == 1:
                 keys.extend(keys)
         log.debug('Decryption Keys %s', keys)
@@ -191,38 +168,44 @@ class FFMPEGMuxerDRM(FFMPEGMuxer):
 
     def __init__(self, session, *streams, **options):
         super().__init__(session, *streams, **options)
-        # if a decryption key is set, we rebuild the ffmpeg command list
-        # to include the key before specifying the input stream
         keys = self._get_keys(session)
         key = 0
         subtitles = self.session.options.get("use-subtitles")
-        # Build new ffmpeg command list
         old_cmd = self._cmd.copy()
         self._cmd = []
+        
         while len(old_cmd) > 0:
             cmd = old_cmd.pop(0)
             if keys and cmd == "-i":
                 _ = old_cmd.pop(0)
                 self._cmd.extend(["-re"])
-                self._cmd.extend(["-readrate_initial_burst", "4"])
+                self._cmd.extend(["-readrate_initial_burst", "10"])
                 self._cmd.extend(["-decryption_key", keys[key]])
                 self._cmd.extend(["-copyts"])
                 key += 1
-                # If we had more streams than keys, start with the first
-                # audio key again
                 if key == len(keys):
                     key = 1
                 self._cmd.extend([cmd, _])
-                # self._cmd.extend(['-thread_queue_size', '4096'])
             elif subtitles and cmd == "-c:a":
                 _ = old_cmd.pop(0)
                 self._cmd.extend([cmd, _])
-                self._cmd.extend(["-c:s", "copy"])
+                # Enhanced subtitle handling
+                self._cmd.extend([
+                    "-c:s", "copy",
+                    "-f", "lavfi",
+                    "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+                    "-metadata:s:s:0", "language=eng",
+                    "-metadata:s:a:0", "language=eng"
+                ])
             else:
                 self._cmd.append(cmd)
+        
         if self._cmd and (self._cmd[-1].startswith("pipe:") or not self._cmd[-1].startswith("-")):
             final_output = self._cmd.pop()
             self._cmd.extend(["-mpegts_copyts", "1"])
+            self._cmd.extend(["-fflags", "+flush_packets"])
+            self._cmd.extend(["-flush_packets", "1"])
+            self._cmd.extend(["-max_delay", "50000"])
             self._cmd.append(final_output)
         log.debug("Updated ffmpeg command %s", self._cmd)
 
@@ -237,11 +220,6 @@ class DASHStreamWorkerDRM(DASHStreamWorker):
     stream: DASHStreamDRM
 
     def next_period_available(self):
-        '''
-        Check whether there are any more periods in the overall list of periods
-        beyond the current period id. If so, return the index for the next period
-        otherwise return 0
-        '''
         period_id = self.reader.ident[0]
         current_period_ids = [ p.id for p in self.mpd.periods ]
         current_period_idx = current_period_ids.index(period_id)
@@ -254,15 +232,10 @@ class DASHStreamWorkerDRM(DASHStreamWorker):
         return 0
 
     def check_new_rep(self):
-        '''
-        Check if new representation is available, if so find the matching stream
-        name and return with the new rep's stream object
-        '''
         new_rep = None
         log.debug("Checking for new representations")
         next_period = self.next_period_available()
         if next_period:
-            # reparse manifest to find the next stream
             reloaded_streams = DASHStreamDRM.parse_manifest(self.session,
                                                         self.mpd.url,
                                                         next_period)
@@ -278,20 +251,13 @@ class DASHStreamWorkerDRM(DASHStreamWorker):
         return new_rep
 
     def iter_segments(self):
-        '''
-        This is copy of iter_segments, but with DRM checks disabled,
-        and slight change to limit max amount of time to wait before
-        looking for segments
-        '''
         init = True
         back_off_factor = 1
         new_rep = None
         yield_count = -1
         while not self.closed:
-            # find the representation by ID
             representation = self.mpd.get_representation(self.reader.ident)
 
-            # check if a new representation is available
             if not new_rep:
                 new_rep = self.check_new_rep()
 
@@ -301,10 +267,6 @@ class DASHStreamWorkerDRM(DASHStreamWorker):
                 refresh_wait = (
                     max(
                         self.mpd.minimumUpdatePeriod.total_seconds(),
-                        # dont take the whole rep duration as wait time
-                        # as some mpd will set a large number. we then
-                        # end up staying in the sleeper loop too long
-                        # and ffmpeg will timeout
                         min(representation.period.duration.total_seconds(),5)
                         if representation else 0,
                     )
@@ -312,14 +274,10 @@ class DASHStreamWorkerDRM(DASHStreamWorker):
                 )
 
             if new_rep and not yield_count:
-                # New rep available and no yield so we swap to the new one
                 self.reader.ident = new_rep.ident
                 representation = new_rep
                 new_rep = None
             elif new_rep and yield_count:
-                # New rep available but we had yield so we dont swap yet.
-                # Set refresh to be very low since we know we actually have
-                # new content in the from of new_rep
                 refresh_wait = 1
 
             with self.sleeper(refresh_wait * back_off_factor):
@@ -328,7 +286,6 @@ class DASHStreamWorkerDRM(DASHStreamWorker):
 
                 iter_segments = representation.segments(
                     init=init,
-                    # sync initial timeline generation between audio and video threads
                     timestamp=self.reader.timestamp if init else None,
                 )
                 yield_count = 0
@@ -338,7 +295,6 @@ class DASHStreamWorkerDRM(DASHStreamWorker):
                     yield_count += 1
                     yield segment
 
-                # close worker if type is not dynamic (all segments were put into writer queue)
                 if self.mpd.type != "dynamic":
                     self.close()
                     return
@@ -412,17 +368,6 @@ class DASHStreamDRM(DASHStream):
         with_audio_only: bool = False,
         **kwargs,
     ) -> dict[str, DASHStreamDRM]:
-        """
-        Parse a DASH manifest file and return its streams.
-
-        :param session: Streamlink session instance
-        :param url_or_manifest: URL of the manifest file or an XML manifest string
-        :param period: Which MPD period to use (index number (int) or ``id`` attribute (str)) for finding representations
-        :param with_video_only: Also return video-only streams, otherwise only return muxed streams
-        :param with_audio_only: Also return audio-only streams, otherwise only return muxed streams
-        :param kwargs: Additional keyword arguments passed to :meth:`requests.Session.request`
-        """
-
         manifest, mpd_params = cls.fetch_manifest(session, url_or_manifest, **kwargs)
 
         try:
@@ -472,7 +417,8 @@ class DASHStreamDRM(DASHStream):
                 elif rep.mimeType.startswith("audio"):  # pragma: no branch
                     audio.append(rep)
                 elif (session.options.get("use-subtitles") and
-                        rep.mimeType.startswith("application")):
+                        (rep.mimeType.startswith("application") or 
+                         rep.mimeType.startswith("text"))):
                     subtitles.append(rep)
 
         if not video:
@@ -487,7 +433,6 @@ class DASHStreamDRM(DASHStream):
         lang = None
         available_languages = set()
 
-        # if the locale is explicitly set, prefer that language over others
         for aud in audio:
             if aud and aud.lang:
                 available_languages.add(aud.lang)
@@ -496,14 +441,12 @@ class DASHStreamDRM(DASHStream):
                         lang = aud.lang
 
         if not lang:
-            # filter by the first language that appears
             lang = audio[0].lang if audio[0] else None
 
         log.debug(
             f"Available languages for DASH audio streams: {', '.join(available_languages) or 'NONE'} (using: {lang or 'n/a'})",
         )
 
-        # if the language is given by the stream, filter out other languages that do not match
         if len(available_languages) > 1:
             audio = [a for a in audio if a and (a.lang is None or a.lang == lang)]
 
@@ -517,11 +460,8 @@ class DASHStreamDRM(DASHStream):
 
             if vid:
                 stream_name.append(f"{vid.height or vid.bandwidth_rounded:0.0f}{'p' if vid.height else 'k'}")
-            #if aud and len(audio) > 1:
-            #    stream_name.append(f"a{aud.bandwidth:0.0f}k")
             ret.append(("+".join(stream_name), stream))
 
-        # rename duplicate streams
         dict_value_list = defaultdict(list)
         for k, v in ret:
             dict_value_list[k].append(v)
@@ -529,9 +469,7 @@ class DASHStreamDRM(DASHStream):
         def sortby_bandwidth(dash_stream: DASHStreamDRM) -> float:
             if dash_stream.video_representation:
                 return dash_stream.video_representation.bandwidth
-            #if dash_stream.audio_representation:
-            #    return dash_stream.audio_representation.bandwidth
-            return 0  # pragma: no cover
+            return 0
 
         ret_new = {}
         for q in dict_value_list:
@@ -548,7 +486,6 @@ class DASHStreamDRM(DASHStream):
                 else:
                     ret_new[f"{q}_alt{n}"] = items[n]
 
-        # add stream_name to the returned streams so we can find it again
         for stream_name in ret_new:
             ret_new[stream_name].stream_name = stream_name
 
@@ -573,10 +510,6 @@ class DASHStreamDRM(DASHStream):
             video.open()
             fds.append(video)
 
-        #if rep_audio:
-        #    audio = DASHStreamReaderDRM(self, rep_audio, timestamp)
-        #    log.debug(f"Opening DASH reader for: {rep_audio.ident!r} - {rep_audio.mimeType}")
-
         next_map = 1
         if rep_audios:
             for i, rep_audio in enumerate(rep_audios):
@@ -590,11 +523,8 @@ class DASHStreamDRM(DASHStream):
             maps.extend(f"{i}:a" for i in range(next_map, next_map + len(rep_audios)))
             next_map = len(rep_audios) + 1
 
-        # only do subtitles if we have video
         if rep_subtitles and rep_subtitles[0] and rep_video:
             for _, rep_subtitle in enumerate(rep_subtitles):
-                #if not rep_subtitle:
-                    #break
                 subtitle = DASHStreamReaderSUB(self, rep_subtitle, timestamp)
                 log.debug(f"Opening DASH reader for: {rep_subtitle.ident!r} - {rep_subtitle.mimeType}")
                 subtitle.open()
@@ -615,31 +545,27 @@ Beginning of Dispatchwrapparr Section
 """
 
 def parse_args():
-    # Initial wrapper arguments
     parser = argparse.ArgumentParser(description="Dispatchwrapparr: A wrapper for Dispatcharr")
     parser.add_argument("-i", required=True, help="Input URL")
     parser.add_argument("-ua", required=True, help="User-Agent string")
     parser.add_argument("-proxy", help="Optional HTTP proxy (e.g. http://127.0.0.1:8888)")
+    parser.add_argument("-proxybypass", help="Comma-separated list of hostnames or IP patterns to bypass the proxy (e.g. '192.168.*.*,*.lan')")
     parser.add_argument("-clearkeys", help="Optional Supply a json file or URL containing URL/Clearkey maps (e.g. 'clearkeys.json' or 'https://some.host/clearkeys.json')")
     parser.add_argument("-subtitles", action="store_true", help="Enable support for subtitles (if available)")
+    parser.add_argument("-teletext", action="store_true", help="Enable support for teletext subtitles (if available)")
     parser.add_argument("-loglevel", type=str, default="INFO", choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"], help="Enable logging and set log level. (default: INFO)")
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.proxybypass and not args.proxy:
+        parser.error("argument -proxybypass: requires -proxy to be set")
+
+    return args
 
 
 def configure_logging(level="INFO") -> logging.Logger:
-    """
-    Set up console logging for both the script and Streamlink.
-
-    Args:
-        level (str): Logging level. One of: "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET".
-
-    Returns:
-        logging.Logger: Configured logger instance.
-    """
     level = level.upper()
     numeric_level = getattr(logging, level, logging.INFO)
 
-    # Set root logger (used by Streamlink internally)
     root_logger = logging.getLogger()
     root_logger.setLevel(numeric_level)
 
@@ -649,38 +575,81 @@ def configure_logging(level="INFO") -> logging.Logger:
         console.setFormatter(formatter)
         root_logger.addHandler(console)
 
-    # Ensure streamlink logger is not being filtered or silenced
     streamlink_log = logging.getLogger("streamlink")
     streamlink_log.setLevel(numeric_level)
     streamlink_log.propagate = True
 
-    # Your application logger
     log = logging.getLogger("dispatchwrapparr")
     return log
 
+def parse_header_params(raw_url: str) -> Tuple[str, Dict[str, str]]:
+    if '#headers=' not in raw_url:
+        return raw_url, {}
+    
+    base_url, header_params = raw_url.split('#headers=', 1)
+    headers = {}
+    
+    for param in header_params.split('&'):
+        if ':' in param:
+            key, value = param.split(':', 1)
+            headers[key.lower()] = unquote(value)
+    
+    return base_url, headers
+
+def check_clearkey_in_url(raw_url: str):
+    headers = {}
+    clearkey = None
+    stream_url = raw_url
+    
+    if '#headers=' in raw_url:
+        stream_url, headers = parse_header_params(raw_url)
+        raw_url = stream_url
+    
+    if '#clearkey=' in raw_url:
+        stream_url, clearkey = raw_url.split('#clearkey=', 1)
+    
+    return stream_url, clearkey, headers
+
+def proxy_bypass_req(url: str, useragent: str, bypasslist: str, headers: Dict[str, str] = None) -> str | None:
+    req_headers = {"User-Agent": useragent}
+    if headers:
+        req_headers.update(headers)
+    proxies = {}
+    bypass_patterns = [pattern.strip() for pattern in bypasslist.split(",")]
+
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname or not any(fnmatch.fnmatch(hostname, pat) for pat in bypass_patterns):
+            return url
+
+        while True:
+            response = requests.get(url, headers=req_headers, proxies=proxies, allow_redirects=False, timeout=5)
+            status = response.status_code
+            if status == 200:
+                return None
+            elif status in (301, 302):
+                location = response.headers.get("Location")
+                if not location:
+                    break
+                next_host = urlparse(location).hostname
+                if next_host and any(fnmatch.fnmatch(next_host, pat) for pat in bypass_patterns):
+                    url = location
+                    continue
+                else:
+                    return location
+            else:
+                return url
+    except Exception as e:
+        log.warning(f"proxy_bypass_req failed: {e}")
+        return url
+
 def check_clearkeys_for_url(stream_url: str, clearkeys_source: str = None) -> str | None:
-    """
-    Return the ClearKey string from JSON mapping for the given stream URL.
-    Supports wildcard pattern matching. Defaults to ./clearkeys.json.
-
-    Args:
-        stream_url (str): The stream URL to look up.
-        clearkeys_source (str, optional): Local file path or URL. Defaults to 'clearkeys.json' in same directory as dispatchwrapparr.py.
-
-    Returns:
-        str or None: ClearKey string, or None if not found.
-    """
-
     def is_url(path_or_url):
         parsed = urlparse(path_or_url)
         return parsed.scheme in ('http', 'https')
 
     def resolve_path(path: str) -> str:
-        """
-        Resolve a path to an absolute path.
-        If the path is already absolute, return as-is.
-        If it's relative, treat it as relative to the script's directory.
-        """
         if os.path.isabs(path):
             return path
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -702,7 +671,6 @@ def check_clearkeys_for_url(stream_url: str, clearkeys_source: str = None) -> st
         log.error(f"Failed to load ClearKey JSON from '{clearkeys_source}': {e}")
         return None
 
-    # Wildcard pattern matching
     for pattern, clearkey in keymap.items():
         if fnmatch.fnmatch(stream_url, pattern):
             log.info(f"Clearkey(s) match for '{stream_url}': '{clearkey}'")
@@ -711,35 +679,20 @@ def check_clearkeys_for_url(stream_url: str, clearkeys_source: str = None) -> st
     log.info(f"No matching clearkey(s) found for '{stream_url}'. Moving on.")
     return None
 
-def check_clearkey_in_url(raw_url: str):
-    """
-    Parses the input URL. If it contains '#clearkey=', splits it into the stream URL and the ClearKey string.
-
-    The ClearKey string may be a single key or a comma-delimited list of keys (optionally including KIDs).
-
-    Args:
-        raw_url (str): The raw URL from the -i argument.
-
-    Returns:
-        tuple: (stream_url, clearkey) where clearkey is the extracted string or None.
-    """
-    if '#clearkey=' in raw_url:
-        stream_url, clearkey = raw_url.split('#clearkey=', 1)
-        return stream_url, clearkey
-    return raw_url, None
-
-
-
-def detect_stream_type(session, url, user_agent=None, proxy=None):
+def detect_stream_type(session, url, user_agent=None, proxy=None, headers=None):
     try:
+        if headers:
+            session.set_option("http-headers", headers)
         return session.streams(url)
     except NoPluginError:
         log.warning("No plugin found for URL. Attempting fallback based on MIME type...")
 
-        headers = {
+        req_headers = {
             "User-Agent": user_agent or "Mozilla/5.0",
             "Range": "bytes=0-1023"
         }
+        if headers:
+            req_headers.update(headers)
 
         proxies = {
             "http": proxy,
@@ -749,7 +702,7 @@ def detect_stream_type(session, url, user_agent=None, proxy=None):
         try:
             response = requests.get(
                 url,
-                headers=headers,
+                headers=req_headers,
                 proxies=proxies,
                 stream=True,
                 timeout=5
@@ -775,44 +728,55 @@ def detect_stream_type(session, url, user_agent=None, proxy=None):
         raise
 
 def main():
-    global log # allow assignment to the module-level variable
-
-    args = parse_args() # Parse input arguments
-
-    log = configure_logging(args.loglevel) # Configure logging
-    log.info(f"Log Level: '{args.loglevel}'")
-
-    clearkey = None # Initialise clearkey var
-    input_url, clearkey = check_clearkey_in_url(args.i) # Check -i (input URL) for a clearkey (#clearkey=) and set variable. Also create the input_url variable
+    global log
+    args = parse_args()
+    log = configure_logging(args.loglevel)
+    
+    input_url, clearkey, url_headers = check_clearkey_in_url(args.i)
+    
     log.info(f"Stream URL: '{input_url}'")
-
-    # Check if we already have a clearkey from the check_clearkey_in_url() function, and if not check if we can find one by url if the -clearkeys parameter is set
-    if clearkey is None and args.clearkeys:
-        # If -clearkeys argument is supplied, search for a URL match in supplied file
-        clearkey = check_clearkeys_for_url(args.i,args.clearkeys)
-
-    session = Streamlink() # Start Streamlink session
-
-    # Apply the supplied user-agent string to streamlink session
+    if clearkey:
+        log.info(f"Clearkey found in URL")
+    if url_headers:
+        log.info(f"Custom headers from URL: {url_headers}")
     log.info(f"User Agent: '{args.ua}'")
-    session.set_option("http-headers", {
-        "User-Agent": args.ua
-    })
-
-    # Apply proxy server to streamlink if supplied using -proxy parameter
     if args.proxy:
         log.info(f"HTTP Proxy: '{args.proxy}'")
+
+    if clearkey is None and args.clearkeys:
+        clearkey = check_clearkeys_for_url(args.i, args.clearkeys)
+
+    if args.proxybypass:
+        log.info(f"Proxy Bypass: '{args.proxybypass}'")
+        bypass_result = proxy_bypass_req(input_url, args.ua, args.proxybypass, url_headers)
+        if bypass_result is None:
+            log.info("Bypassing supplied proxy for stream URL: '{input_url}'")
+            args.proxy = None
+        else:
+            input_url = bypass_result
+            log.info(f"Determined stream URL to proxy: '{input_url}'")
+
+    session = Streamlink()
+    
+    headers = {"User-Agent": args.ua}
+    if url_headers:
+        headers.update(url_headers)
+    
+    session.set_option("http-headers", headers)
+
+    if args.proxy:
         session.set_option("http-proxy", args.proxy)
 
-    # If -subtitles flag is set (mux-subtitles is False by default)
-    if args.subtitles:
-        log.info(f"Subtitles: True")
+    # Enhanced subtitle/teletext handling
+    if args.subtitles or args.teletext:
+        log.info("Subtitle support enabled")
         session.set_option("mux-subtitles", True)
+        session.set_option("subtitle-languages", "all")
+        if args.teletext:
+            log.info("Teletext support enabled")
+            session.set_option("ffmpeg-options", "parse_teletext=1")
 
-    # If loglevel set as option, pass the same loglevel to ffmpeg
-    python_loglevel = args.loglevel.upper() # Normalise the string and set python_loglevel var
-
-    # Create a dict with python to ffmpeg loglevel equivalencies
+    python_loglevel = args.loglevel.upper()
     python_to_ffmpeg_loglevel = {
         "CRITICAL": "panic",
         "ERROR":    "error",
@@ -822,44 +786,32 @@ def main():
         "NOTSET":   "trace"
     }
 
-    ffmpeg_loglevel = python_to_ffmpeg_loglevel.get(python_loglevel) # Set variable with the equivalent loglevel
-
-    session.set_option("ffmpeg-loglevel", ffmpeg_loglevel) # Set the ffmpeg loglevel in the session options
-
-    # Apply streamlink options that apply to all streams
-    session.set_option("ffmpeg-fout", "mpegts") # Encode as mpegts when ffmpeg muxing (not matroska like default)
-    session.set_option("ffmpeg-verbose", True) # Pass ffmpeg stderr through to streamlink
-    session.set_option("stream-segment-threads", 4) # Number of threads for fetching segments
+    ffmpeg_loglevel = python_to_ffmpeg_loglevel.get(python_loglevel)
+    session.set_option("ffmpeg-loglevel", ffmpeg_loglevel)
+    session.set_option("ffmpeg-fout", "mpegts")
+    session.set_option("ffmpeg-verbose", True)
+    session.set_option("stream-segment-threads", 2)
     streams = None
 
-    # If a clearkey is detected, prepare the stream for DRM decryption
     if clearkey:
         log.info(f"Clearkey(s): '{clearkey}'")
-        # Prepend dashdrm:// to input_url for dashdrm plugin matching
         input_url = f"dashdrm://{input_url}"
-        # Load dashdrm plugin
         plugin = MPEGDASHDRM(session, input_url)
-        # Set the dashdrm plugin options
-        plugin.options["decryption-key"] = [clearkey] # pass clearkey tuple to plugin
-        plugin.options["presentation-delay"] = 30 # Begin dash-drm streams n seconds behind live
-        if args.subtitles:
+        plugin.options["decryption-key"] = [clearkey]
+        plugin.options["presentation-delay"] = 30
+        if args.subtitles or args.teletext:
             plugin.options["use-subtitles"]
-        # Fetch the available streams
         try:
             streams = plugin.streams()
         except PluginError as e:
             log.error(f"Failed to load DRM plugin: {e}")
             return
-
-    # For all other non-DRM/clearkey encrypted streams
     else:
-        # Set session options for non-DRM streams
-        session.set_option("ffmpeg-copyts", True) # Copy timestamps enabled for ffmpeg muxing
-        session.set_option("hls-start-offset", 30) # Begin HLS streams n seconds behind live
-        session.set_option("ffmpeg-start-at-zero", True) # Start at zero for ffmpeg muxing
-        # Fetch the available streams
+        session.set_option("ffmpeg-copyts", True)
+        session.set_option("hls-start-offset", 30)
+        session.set_option("ffmpeg-start-at-zero", True)
         try:
-            streams = detect_stream_type(session, input_url, user_agent=args.ua, proxy=args.proxy) # Pass stream detection off to the detect_stream_type function
+            streams = detect_stream_type(session, input_url, user_agent=args.ua, proxy=args.proxy, headers=url_headers)
         except Exception as e:
             log.error(f"Stream setup failed: {e}")
             return
@@ -868,7 +820,6 @@ def main():
         log.error("No playable streams found.")
         return
 
-    # Select best steam, live or iterate until one is found
     log.info("Selecting best available stream.")
     stream = streams.get("best") or streams.get("live") or next(iter(streams.values()), None)
 
@@ -876,13 +827,11 @@ def main():
         log.error("No streams available.")
         return
 
-    # Open stream and pipe to stdout
-
     try:
         log.info("Starting stream.")
         with stream.open() as fd:
             while True:
-                data = fd.read(188 * 64) # Match buffer settings of Dispatcharr for optimal MPEG-TS buffering
+                data = fd.read(188 * 64)
                 if not data:
                     break
                 try:
@@ -893,7 +842,6 @@ def main():
     except KeyboardInterrupt:
         log.info("Stream interrupted, canceling.")
 
-# Set default SIGPIPE behavior so dispatchwrapparr exits cleanly when the pipe is closed
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 if __name__ == "__main__":
