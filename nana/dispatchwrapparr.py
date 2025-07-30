@@ -1,21 +1,8 @@
 #!/usr/bin/env python3
 
 """
-Dispatchwrapparr - Version 0.4.4 Beta: A wrapper for Dispatcharr that supports the following:
-
-  - M3U8/DASH-MPD best stream selection, segment download handling and piping to ffmpeg
-  - DASH-MPD DRM clearkey support
-  - HTTP Proxy Support
-  - Support for Youtube Livestreams and many others
-  - Extended MIME-type stream detection for Streamlink
-  - URL header parameters support (#headers=origin&referer)
-  - Enhanced Teletext/Subtitle support with FFmpeg
-
-Usage: dispatchwrapper.py -i <URL> -ua <User Agent String>
-Optional: -proxy <proxy server> -proxybypass <proxy bypass list> -clearkeys <file/url> -loglevel <level> -subtitles
+Dispatchwrapparr - Version 0.4.6 Beta: Complete subtitle/teletext solution
 """
-
-from __future__ import annotations
 
 import os
 import re
