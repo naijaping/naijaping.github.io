@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Shaka Player - DASH & HLS with ClearKey</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.8/shaka-player.compiled.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    #video-container {
+      flex: 1;
+      background: black;
+      display: none; /* Hidden until play */
+    }
+    #video-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    #form-container {
+      padding: 20px;
+      background: #222;
+      text-align: center;
+    }
+    .input-group {
+      margin: 12px 0;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      background: #333;
+      color: white;
+      box-sizing: border-box;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover { opacity: 0.9; }
+    .note {
+      color: #ffcc00;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="video-container">
+    <video controls autoplay></video>
+  </div>
+  <div id="form-container">
+    <div class="input-group">
+      <label for="streamUrl">Stream URL (.mpd or .m3u8)</label>
+      <input type="text" id="streamUrl" placeholder="https://example.com/stream.mpd" required>
+    </div>
+    <div class="input-group">
+      <label for="keyId">Key ID (32-char hex)</label>
+      <input type="text" id="keyId" placeholder="e.g. 0b42be2664d7e811d04f3e504e0924c5">
+    </div>
+    <div class="input-group">
+      <label for="key">Key (32-char hex)</label>
+      <input type="text" id="key" placeholder="e.g. ae24090123b8c72ac5404dc152847cb8">
+    </div>
+    <button onclick="playStream()">Play Stream</button>
+    <div class="note">
+      🔑 For ClearKey: Enter both Key ID and Key in <b>hex</b> (32 chars).<br>
+      🔓 For unencrypted streams: Leave Key ID/Key empty.
+    </div>
+  </div>
+
+  <script>
+    // Utility: Hex string → Base64
+    function hexToBase64(hex) {
+      if (!hex) return null;
+      hex = hex.replace(/\s/g, '').toLowerCase();
+      if (hex.length !== 32) return null;
+      const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+      return btoa(String.fromCharCode.apply(null, bytes));
+    }
+
+    async function playStream() {
+      const streamUrl = document.getElementById('streamUrl').value.trim();
+      const keyIdHex = document.getElementById('keyId').value.trim();
+      const keyHex = document.getElementById('key').value.trim();
+
+      if (!streamUrl) {
+        alert('Please enter a stream URL');
+        return;
+      }
+
+      // Hide form, show player
+      document.getElementById('form-container').style.display = 'none';
+      document.getElementById('video-container').style.display = 'block';
+
+      const video = document.querySelector('video');
+      const player = new shaka.Player(video);
+
+      // Install polyfills (for older browsers)
+      await shaka.polyfill.installAll();
+
+      // Configure player
+      const config = {
+        streaming: {
+          lowLatencyMode: true,
+          inaccurateManifestTolerance: 0,
+        }
+      };
+
+      if (keyIdHex && keyHex) {
+        const kidB64 = hexToBase64(keyIdHex);
+        const keyB64 = hexToBase64(keyHex);
+
+        if (!kidB64 || !keyB64) {
+          alert('Invalid Key ID or Key (must be 32-char hex)');
+          return;
+        }
+
+        config.drm = {
+          clearKeys: {
+            [kidB64]: keyB64
+          },
+          servers: {} // No license server for ClearKey
+        };
+      }
+
+      player.configure(config);
+
+      try {
+        await player.load(streamUrl);
+        console.log('Stream loaded successfully');
+      } catch (error) {
+        console.error('Error loading stream:', error);
+        alert('Failed to load stream:\n' + (error.message || error));
+        // Show form again on error
+        document.getElementById('form-container').style.display = 'block';
+        document.getElementById('video-container').style.display = 'none';
+      }
+    }
+
+    // Optional: Auto-play from URL parameters
+    window.addEventListener('load', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const url = urlParams.get('url');
+      const kid = urlParams.get('kid');
+      const key = urlParams.get('key');
+
+      if (url) {
+        document.getElementById('streamUrl').value = url;
+        if (kid) document.getElementById('keyId').value = kid;
+        if (key) document.getElementById('key').value = key;
+        // Uncomment to auto-play:
+        // setTimeout(playStream, 1000);
+      }
+    });
+  </script>
+</body>
+</html>
