@@ -6,8 +6,8 @@ services:
     ports:
       - "8928:8000"
     volumes:
-      - /srv/dev-disk-by-uuid-3b0a4e51-9d7c-4bb6-b149-afd4cff6f49a/data/dockers/appdata/iptv-streamer/data:/app/data          # Persistent channel config
-      - /srv/dev-disk-by-uuid-3b0a4e51-9d7c-4bb6-b149-afd4cff6f49a/data/dockers/appdata/iptv-streamer/logs:/app/logs 
+      - /srv/dev-disk-by-uuid-90b0a4e51-9d7c8888888888data/dockers/appdata/iptv-streamer/data:/app/data          # Persistent channel config
+      - /srv/dev-disk-by-uuid-90b0a4e51-9d7c8888888888data/dockers/appdata/iptv-streamer/logs:/app/logs 
     restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
