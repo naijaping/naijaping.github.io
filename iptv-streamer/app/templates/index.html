@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>IPTV Streamer Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .channel-card { transition: transform 0.2s; }
+        .channel-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .stream-url { font-family: monospace; font-size: 0.85em; word-break: break-all; }
+        .health-badge {
+            font-size: 0.75rem;
+            padding: 0.3em 0.6em;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        .health-good { background: #d4edda; color: #155724; }
+        .health-warning { background: #fff3cd; color: #856404; }
+        .health-danger { background: #f8d7da; color: #721c24; }
+        .health-loading { background: #e2e3e5; color: #495057; }
+        .toast { min-width: 250px; }
+    </style>
+</head>
+<body>
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">📺 IPTV Streamer</h1>
+        <a href="{{ url_for('add_channel') }}" class="btn btn-success">➕ Add Channel</a>
+    </div>
+
+    <div id="channels-data" data-keys='{{ channels.keys()|list|tojson|safe }}' style="display:none"></div>
+
+    {% if not channels %}
+    <div class="alert alert-info">No channels yet. <a href="{{ url_for('add_channel') }}">Add one!</a></div>
+    {% else %}
+    <div class="row g-4">
+        {% for key, ch in channels.items() %}
+        <div class="col-12 col-md-6 col-xl-4">
+            <div class="card channel-card h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <span class="badge bg-primary me-2">{{ key }}</span>
+                            <h5 class="card-title d-inline">{{ ch.name }}</h5>
+                        </div>
+                        <span class="health-badge health-loading" id="health-{{ key|replace(' ', '_') }}">⏳</span>
+                    </div>
+
+                    <p class="text-muted small mb-2">
+                        <code class="stream-url">http://{{ request.host }}/{{ key }}</code>
+                    </p>
+
+                    <div class="mt-auto">
+                        <div class="d-grid gap-2 mb-3">
+                            <a href="/{{ key }}" class="btn btn-sm btn-outline-primary" target="_blank">▶️ Play Stream</a>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-secondary flex-fill"
+                                        onclick="copyToClipboard('http://{{ request.host }}/{{ key }}')">
+                                    📋 Copy URL
+                                </button>
+                                <button
+                                    class="btn btn-sm btn-outline-info flex-fill"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#sourceModal"
+                                    data-channel-key="{{ key|e }}"
+                                    data-channel-name="{{ ch.name|e }}">
+                                    🔍 View Sources
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('edit_channel', key=key) }}" class="btn btn-sm btn-outline-primary flex-fill">✏️ Edit</a>
+                            <a href="{{ url_for('delete_channel', key=key) }}"
+                               class="btn btn-sm btn-outline-danger flex-fill confirm-delete"
+                               data-channel-name="{{ ch.name|e }}">
+                                🗑️ Delete
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Source Health Modal -->
+<div class="modal fade" id="sourceModal" tabindex="-1" role="dialog" aria-labelledby="sourceModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="sourceModalLabel">Sources for <span id="modal-channel-name"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="sources-list" class="text-center py-3">Loading...</div>
+      </div>
+      <div class="modal-footer">
+        <a id="edit-channel-link" class="btn btn-primary" href="#">✏️ Edit Full Channel</a>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showNotification('Copied to clipboard!', 'success');
+        }).catch(fallbackCopy);
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        const success = document.execCommand('copy');
+        if (success) {
+            showNotification('Copied to clipboard!', 'success');
+        } else {
+            showNotification('Failed to copy. Please copy manually.', 'error');
+        }
+    } catch (err) {
+        showNotification('Copy not supported. Please copy manually.', 'error');
+    }
+    document.body.removeChild(textarea);
+}
+
+function showNotification(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+    toast.style.position = 'fixed';
+    toast.style.bottom = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '1000';
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast, { delay: 2000 });
+    bsToast.show();
+    toast.addEventListener('hidden.bs.toast', () => {
+        document.body.removeChild(toast);
+    });
+}
+
+function prepareSourceModal(channelKey, channelName) {
+    document.getElementById('edit-channel-link').href = `/admin/edit/${encodeURIComponent(channelKey)}`;
+    document.getElementById('modal-channel-name').textContent = channelName;
+    const list = document.getElementById('sources-list');
+    if (list) list.innerHTML = 'Loading source health...';
+
+    fetch(`/health/${encodeURIComponent(channelKey)}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Network error');
+            return response.json();
+        })
+        .then(data => {
+            let html = '<div class="list-group">';
+            if (!data.sources?.length) {
+                html = '<div class="alert alert-info">No enabled sources.</div>';
+            } else {
+                data.sources.forEach(src => {
+                    const cls = src.healthy ? 'success' : 'danger';
+                    const txt = src.healthy ? '✅ Healthy' : '❌ Unhealthy';
+                    html += `
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div class="fw-monospace small text-truncate" style="max-width: 80%;">${src.url}</div>
+                            <span class="badge bg-${cls}">${txt}</span>
+                        </div>
+                    `;
+                });
+            }
+            html += '</div>';
+            if (list) list.innerHTML = html;
+        })
+        .catch(err => {
+            console.error("Health fetch failed:", err);
+            if (list) {
+                list.innerHTML = `<div class="alert alert-danger">Error: ${err.message || 'Unknown'}</div>`;
+            }
+        });
+}
+
+function updateHealthBadges() {
+    const keysEl = document.getElementById('channels-data');
+    const keys = keysEl ? JSON.parse(keysEl.getAttribute('data-keys') || '[]') : [];
+    keys.forEach(key => {
+        const badge = document.getElementById(`health-${key.replace(/ /g, '_')}`);
+        if (!badge) return;
+        fetch(`/health/${encodeURIComponent(key)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.total === 0) {
+                    badge.textContent = "–/–";
+                    badge.className = "health-badge health-loading";
+                } else {
+                    badge.textContent = `${data.healthy}/${data.total} Healthy`;
+                    if (data.healthy === data.total) badge.className = "health-badge health-good";
+                    else if (data.healthy > 0) badge.className = "health-badge health-warning";
+                    else badge.className = "health-badge health-danger";
+                }
+            })
+            .catch(() => {
+                badge.textContent = "⚠️";
+                badge.className = "health-badge health-warning";
+            });
+    });
+}
+
+var sourceModalEl = document.getElementById('sourceModal');
+if (sourceModalEl) {
+    sourceModalEl.addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        var key = button && button.getAttribute ? button.getAttribute('data-channel-key') : null;
+        var name = button && button.getAttribute ? button.getAttribute('data-channel-name') : null;
+        if (key !== null) prepareSourceModal(key, name);
+    });
+}
+
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    updateHealthBadges();
+    document.querySelectorAll('.confirm-delete').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+            var name = el.getAttribute('data-channel-name') || '';
+            if (!confirm('Delete ' + name + '?')) {
+                e.preventDefault();
+            }
+        });
+    });
+});
+</script>
+</body>
+</html>

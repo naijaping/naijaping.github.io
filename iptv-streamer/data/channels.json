@@ -1,0 +1,134 @@
+{
+  "cn": {
+    "name": "Cartoon Network",
+    "sources": [
+      {
+        "url": "http://esogalaxiusnext.tech:80/play/live.php?mac=00:1A:79:5E:CA:7F&stream=577401&extension=ts",
+        "enabled": true
+      },
+      {
+        "url": "http://sho.kwqxz.com/live/q5sRK0wTvt/ClUTwu8fpf/1349.ts",
+        "enabled": true
+      },
+      {
+        "url": "http://sho.kwqxz.com/live/q5sRK0wTvt/ClUTwu8fpf/1349.m3u8",
+        "enabled": true
+      }
+    ],
+    "status": [
+      true,
+      true,
+      true
+    ]
+  },
+  "boom": {
+    "name": "Boomerang",
+    "sources": [
+      {
+        "url": "http://esogalaxiusnext.tech:80/play/live.php?mac=00:1A:79:5E:CA:7F&stream=577402&extension=ts",
+        "enabled": true
+      },
+      {
+        "url": "http://sho.kwqxz.com/live/q5sRK0wTvt/ClUTwu8fpf/1347.m3u8",
+        "enabled": true
+      },
+      {
+        "url": "http://sho.kwqxz.com/live/q5sRK0wTvt/ClUTwu8fpf/1349.ts",
+        "enabled": true
+      }
+    ],
+    "status": [
+      true,
+      true,
+      true
+    ]
+  },
+  "epl1": {
+    "name": "Live Match 1",
+    "sources": [
+      {
+        "url": "https://7pal.short.gy/nowhkp1?.m3u8",
+        "enabled": true
+      }
+    ],
+    "status": [
+      true
+    ]
+  },
+  "nickjr": {
+    "name": "Nick JR",
+    "sources": [
+      {
+        "url": "https://webhop.live/live/juno123/juno123/148256.ts",
+        "enabled": true
+      },
+      {
+        "url": "http://5.ccccc.in:80/play/live.php?mac=00:1A:79:00:4A:7C&stream=577394&extension=ts",
+        "enabled": true
+      }
+    ],
+    "status": [
+      true,
+      false
+    ]
+  },
+  "nicktoons": {
+    "name": "NickToons",
+    "sources": [
+      {
+        "url": "https://webhop.live/live/juno123/juno123/148504.ts",
+        "enabled": true
+      },
+      {
+        "url": "http://x.bittensor.nexus/live/QGYl1NqzeW/SObw1uDJaD/155022.ts",
+        "enabled": true
+      }
+    ],
+    "status": [
+      true,
+      false
+    ]
+  },
+  "nollywood": {
+    "name": "Nolly Africa",
+    "sources": [
+      {
+        "url": "https://amg02784-amg02784c1-distrotv-us-3394.playouts.now.amagi.tv/playlist/amg02784-nollyafricafast-nollyafricahd-distrotvus/playlist.m3u8?c_producer=AfricanMovieChannel&dnt=__LIMIT_AD_TRACKING__&app_bundle=__APP_BUNDLE__&app_name=__APP_NAME__&app_store_url=__STORE_URL__&did=__DEVICE_ID__&app_domain=__APP_DOMAIN__&device_make=__DEVICE_MAKE__&device_model=&coppa=0&ads.rnd=__CACHE_BUSTER__&ads.env_i=__env.i__&ads.env_u=__env.u__&ads.name=DistroTV&ads.bundle=__APP_BUNDLE__&ads.storeurl=__STORE_URL__&ads.appCategory=__APP_CATEGORY__&ads.app_version=__APP_VERSION__&ads.width=__WIDTH__&ads.height=__HEIGHT__&ads.deviceId=__DEVICE_ID__&ads.deviceDNT=__LIMIT_AD_TRACKING__&ads.gdpr=__IS_GDPR__&ads.us_privacy=__IS_CCPA__&ads.aid=__ADVERTISING_ID__&ads.deviceMake=__DEVICE__&ads.deviceIdType=__DEVICE_ID_TYPE__&ads.deviceConnectionType=__DEVICE_CONNECTION_TYPE__&ads.deviceCategory=__DEVICE_CATEGORY__&ads.client_ip=__CLIENT_IP__&ads.geo=__GEO_COUNTRY__&ads.lat=__LATITUDE__&ads.long=__LONGITUDE__&ads.dma=__GEO_DMA__&ads.geoType=__GEO_TYPE__&ads.contentid=23201&ads.content_duration=18000&ads.episode_id=136255&ads.show_id=5239&ads.showCategories=IAB1&ads.episodeCategories=IAB1&ads.genre=Entertainment%2CMovies%2CDrama%2CAfrican&ads.showRating=TV-PG&ads.episodeRating=TV-PG&ads.language=en&ads.showtitle=Nolly%20Africa%20HD&ads.episodetitle=Nolly%20Africa%20HD&ads.keywords=Nollywood%2CAfrica%2CAfrican&ads.contenturl=__PAGEURL_ESC__&ads.gdprConsent=__GDPR_CONSENT__&ads.paln=__PALN__&ads.islive=1&ads.streamtype=live&ads.vf=20250829",
+        "enabled": true
+      }
+    ],
+    "status": [
+      true
+    ]
+  },
+  "bt1": {
+    "name": "BT Sports 1",
+    "sources": [
+      {
+        "url": "http://192.168.100.36:7860/proxy/manifest.m3u8?url=https://vavoo.to/vavoo-iptv/play/3872970879cc727bad3b22",
+        "enabled": true
+      },
+      {
+        "url": "http://192.168.100.36:7860/proxy/manifest.m3u8?url=https://vavoo.to/vavoo-iptv/play/3522426267da4efdabc7bc",
+        "enabled": true
+      }
+    ]
+  },
+  "hgtv": {
+    "name": "HGTV USA",
+    "sources": [
+      {
+        "url": "http://192.168.100.36:7860/proxy/manifest.m3u8?url=https://daddyhd.com/watch.php?id=382",
+        "enabled": true
+      },
+      {
+        "url": "http://tr.redatvgold.com:80/play/live.php?mac=00:1A:79:2A:FF:EB&stream=1350074&extension=ts",
+        "enabled": true
+      }
+    ],
+    "status": [
+      true,
+      true
+    ]
+  }
+}
