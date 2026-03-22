@@ -1,22 +1,1087 @@
-<!doctypehtml><html lang=en><meta charset=UTF-8><meta content="width=device-width,initial-scale=1"name=viewport><meta content=no-referrer name=referrer><link href=data:image/x-icon;, rel=icon><title>github.com/naijaping</title><link href=https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.11.2/controls.min.css rel=stylesheet><link href=https://dbghelp.github.io/xml-epg.css rel=stylesheet><style>body{margin:0;font-family:Arial,sans-serif;display:flex;height:100vh;background-color:#282c34}#playlist{width:350px;background-color:#282c34;color:#fff;overflow-y:auto;border-right:1px solid #444;padding:20px;box-shadow:2px 0 5px rgb(0 0 0 / .2);display:flex;flex-direction:column}#search-input,#url-input{width:100%;padding:10px;margin-bottom:10px;border:1px solid #444;border-radius:5px;background-color:#3c4043;color:#fff;font-size:1em;box-sizing:border-box}#epg-button{display:none;width:100%;padding:10px;margin-bottom:10px;background-color:#61dafb;color:#000;border:none;border-radius:5px;font-size:1em;cursor:pointer;box-shadow:0 4px 8px rgb(0 0 0 / .3)}#fetch-button{width:100%;padding:10px;margin-bottom:10px;background-color:#61dafb;color:#000;border:none;border-radius:5px;font-size:1em;cursor:pointer;box-shadow:0 4px 8px rgb(0 0 0 / .3)}#fetch-button:hover{background-color:#4fa3c4}#epg-button:hover{background-color:#4fa3c4}#video-container{flex:1;display:flex;flex-direction:column;z-index:2}#video{flex:1;width:100%;height:100%;background-color:#000}#video-list{list-style:none;padding:0;margin:0}#video-list li{padding:10px;margin:5px 0;border-radius:5px;cursor:pointer;transition:background-color .3s ease,transform .2s ease;display:flex;align-items:center}#video-list li:hover{background-color:#61dafb;transform:scale(1.05)}#video-list img{width:50px;height:50px;margin-right:10px;border-radius:5px;object-fit:cover;object-fit:contain}.video-title{font-size:1em}.active{background-color:#4fa3c4}#overlay{display:none;flex-direction:column;align-items:center;overflow-y:auto;z-index:2;flex:1}#epg-container{display:none;z-index:1000;position:fixed;width:100%;height:100%;overflow-y:scroll;overflow-x:scroll;background-color:#282c34}#search-input{display:none}.input-container{position:relative;display:flex;align-items:center;width:100%}#upload-button{width:10%;padding:10px;margin-bottom:10px;margin-left:5px;background-color:#61dafb;color:#000;border:none;border-radius:5px;font-size:1em;cursor:pointer;box-shadow:0 4px 8px rgb(0 0 0 / .3)}#upload-button:hover{background-color:#4fa3c4}</style><div id=playlist><div class=input-container><input id=url-input placeholder="Enter M3U8 Playlist URL"> <input id=file-input style=display:none type=file> <button id=upload-button onclick='document.getElementById("file-input").click()'>↑</button></div><button id=fetch-button>Load Playlist</button> <button id=epg-button onclick=openEPG()>EPG</button> <input id=search-input placeholder=Search...><ul id=video-list></ul></div><div id=video-container><video autoplay controls id=video></video></div><div id=overlay></div><div id=epg-container></div><script src=https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js></script><script src=https://dbghelp.github.io/M3U8Interpreter.js></script><script src=https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.4/pako.min.js></script><script src=https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js></script><script src=https://dbghelp.github.io/xml-epg.js></script><script>var xmlepg=new XMLEPG();var overlay=document.getElementById('overlay');var videoContainer=document.getElementById('video-container');var epgContainer=document.getElementById('epg-container');hideOverlayTimeout=null;overlay.addEventListener('mouseenter',()=>{if(hideOverlayTimeout){clearTimeout(hideOverlayTimeout)}
-overlay.style.display='flex';videoContainer.style.display='none'});overlay.addEventListener('mouseleave',()=>{overlay.style.display='none';videoContainer.style.display='flex'});document.addEventListener('DOMContentLoaded',()=>{const videoElement=document.getElementById('video');const videoList=document.getElementById('video-list');const searchInput=document.getElementById('search-input');const urlInput=document.getElementById('url-input');const fetchButton=document.getElementById('fetch-button');const fileInput=document.getElementById('file-input');const uploadButton=document.getElementById('upload-button');let selectedFileContent=null;var player=new shaka.Player(videoElement);var channels;var lastActiveChannel;shaka.polyfill.installAll();var extracted=extractAppendedURL();if(extracted){document.getElementById('upload-button').remove();document.getElementById('url-input').remove();document.getElementById('fetch-button').remove();setPlaylistFromUrl(extracted)}
-fetchButton.addEventListener('click',async()=>{const url=urlInput.value;if(selectedFileContent){setPlaylistFromFile(selectedFileContent)}else if(url){setPlaylistFromUrl(url)}});fileInput.addEventListener('change',(event)=>{const file=event.target.files[0];if(file){urlInput.value=file.name;const reader=new FileReader();reader.onload=(e)=>{selectedFileContent=e.target.result};reader.readAsText(file)}});async function setPlaylistFromUrl(url){try{const response=await fetch(url);if(response.ok){const text=await response.text();parseAndSetPlaylist(text)}else{console.error('Failed to fetch M3U8 playlist.')}}catch(error){console.error('Error fetching M3U8 playlist:',error)}}
-async function setPlaylistFromFile(content){parseAndSetPlaylist(content)}
-async function parseAndSetPlaylist(content){const m3u8Interpreter=new M3U8Interpreter(content);m3u8Interpreter.parse();channels=m3u8Interpreter.getChannels();const urls=m3u8Interpreter.getUrlTvg();xmlepg.setPlaylistChannels(channels);xmlepg.load(urls).then(()=>{xmlepg.displayAllPrograms('epg-container','xmlepg')});if(urls!=null&&urls.length!==0){document.getElementById('epg-button').style.display='block'}
-updatePlaylist(channels);document.getElementById('search-input').style.display='block'}
-function extractAppendedURL(){const params=new URLSearchParams(window.location.search);return params.get('file')}
-window.loadVideo=function(manifestUrl,licenseKey){if(licenseKey!=null&&!Array.isArray(licenseKey)){licenseKey=JSON.parse(decodeURIComponent(licenseKey))}
-if(licenseKey){licenseKey.forEach(pair=>{player.configure({drm:{clearKeys:{[pair.keyId]:pair.key}}})})}
-player.load(manifestUrl);videoElement.play()}
-function updatePlaylist(channels){videoList.innerHTML='';channels.forEach(channel=>{const listItem=document.createElement('li');listItem.innerHTML=`
-										<img src="${channel.tvgLogo}" alt="${channel.channelName} logo">${channel.channelName}
-										</span>`;const imgElement=listItem.querySelector('img');imgElement.onmouseenter=()=>{xmlepg.displayPrograms('overlay',channel.tvgId);overlay.style.display='flex';videoContainer.style.display='none';if(hideOverlayTimeout){clearTimeout(hideOverlayTimeout)}};imgElement.onmouseleave=()=>{hideOverlayTimeout=setTimeout(()=>{overlay.style.display='none';videoContainer.style.display='flex'},100)};listItem.onclick=()=>{loadVideo(channel.manifestUrl,channel.licenseKey);const parent=listItem.parentElement;const children=parent.getElementsByTagName('li');for(let i=0;i<children.length;i++){children[i].classList.remove('active')}
-listItem.classList.add('active');lastActiveChannel=listItem.innerHTML}
-videoList.appendChild(listItem)})}
-function filterPlaylist(searchTerm){const filteredChannels=channels.filter(channel=>channel.channelName.toLowerCase().includes(searchTerm.toLowerCase()));updatePlaylist(filteredChannels)}
-searchInput.addEventListener('input',(event)=>{const searchTerm=event.target.value;filterPlaylist(searchTerm)})});function openEPG(){epgContainer.style.display='block';xmlepg.timelineNeedleRender()}
-function showToast(message){const style=document.createElement('style');style.innerHTML=`
-.toast-container{position:absolute;top:20px;right:20px;z-index:9999}.toast{background-color:#333;color:#fff;padding:10px 20px;border-radius:5px;margin-bottom:10px;font-size:16px;box-shadow:0 4px 6px rgb(0 0 0 / .1);opacity:0;animation:fadeIn 0.5s forwards,fadeOut 3s forwards 2s}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes fadeOut{from{opacity:1}to{opacity:0}}
-		  `;document.head.appendChild(style);const toast=document.createElement('div');toast.classList.add('toast');toast.textContent=message;const toastContainer=document.querySelector('.toast-container');if(!toastContainer){const newContainer=document.createElement('div');newContainer.classList.add('toast-container');document.body.appendChild(newContainer)}
-document.querySelector('.toast-container').appendChild(toast);setTimeout(()=>{toast.remove()},4000)}
-function copyToClipboard(text,name){text=decodeURIComponent(text);navigator.clipboard.writeText(text.replace(/x123x/g,"'")).then(()=>{showToast(name+' command successfully copied to clipboard')}).catch(err=>{showToast('Failed to copy '+name+' download command: ',err)})}</script>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Deprecated - Stream Tester</title>
+	<link rel="preconnect" href="https://cdn.jsdelivr.net">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shaka-player@5.0.6/dist/controls.css">
+	<style>
+		:root {
+			color-scheme: light;
+			--bg: #f3efe6;
+			--panel: rgba(255, 252, 245, 0.92);
+			--panel-strong: #fffaf0;
+			--text: #1f1a15;
+			--muted: #6d6155;
+			--line: rgba(71, 52, 35, 0.12);
+			--accent: #b55233;
+			--accent-strong: #8c351c;
+			--success: #1f7a53;
+			--danger: #b43535;
+			--shadow: 0 20px 60px rgba(61, 40, 14, 0.14);
+			--radius: 5px;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+			color: var(--text);
+			background:
+				radial-gradient(circle at top left, rgba(222, 163, 89, 0.26), transparent 28%),
+				radial-gradient(circle at right 20%, rgba(181, 82, 51, 0.2), transparent 30%),
+				linear-gradient(160deg, #f7f3eb 0%, #efe6d8 48%, #e8dcc9 100%);
+			padding: 24px;
+		}
+
+		.shell {
+			width: min(1320px, 100%);
+			margin: 0 auto;
+			display: grid;
+			grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+			gap: 24px;
+			align-items: start;
+		}
+
+		.panel,
+		.player-panel {
+			background: var(--panel);
+			border: 1px solid var(--line);
+			border-radius: var(--radius);
+			box-shadow: var(--shadow);
+			backdrop-filter: blur(18px);
+		}
+
+		.panel {
+			padding: 24px;
+		}
+
+		.eyebrow {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			padding: 6px 12px;
+			border-radius: var(--radius);
+			background: rgba(181, 82, 51, 0.08);
+			color: var(--accent-strong);
+			font-size: 12px;
+			font-weight: 700;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+		}
+
+		h1 {
+			margin: 16px 0 10px;
+			font-size: clamp(2rem, 4vw, 3.3rem);
+			line-height: 1;
+			letter-spacing: -0.03em;
+		}
+
+		.intro {
+			margin: 0 0 24px;
+			color: var(--muted);
+			line-height: 1.6;
+		}
+
+		.form-grid {
+			display: grid;
+			gap: 16px;
+		}
+
+		.group {
+			display: grid;
+			gap: 8px;
+		}
+
+		.group.double {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 14px;
+		}
+
+		label {
+			font-size: 13px;
+			font-weight: 700;
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+		}
+
+		input,
+		textarea,
+		select {
+			width: 100%;
+			border-radius: var(--radius);
+			border: 1px solid rgba(71, 52, 35, 0.14);
+			font: inherit;
+		}
+
+		input,
+		textarea,
+		select {
+			background: rgba(255, 255, 255, 0.86);
+			color: var(--text);
+			padding: 14px 16px;
+			outline: none;
+			transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+		}
+
+		input:focus,
+		textarea:focus,
+		select:focus {
+			border-color: rgba(181, 82, 51, 0.7);
+			box-shadow: 0 0 0 4px rgba(181, 82, 51, 0.12);
+		}
+
+		textarea {
+			min-height: 130px;
+			resize: vertical;
+			font-family: Consolas, "Courier New", monospace;
+			font-size: 13px;
+		}
+
+		.hint {
+			margin: 0;
+			font-size: 12px;
+			color: var(--muted);
+			line-height: 1.5;
+		}
+
+		.button-row {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 12px;
+		}
+
+		.visibility-switch {
+			display: inline-flex;
+			align-items: center;
+			gap: 10px;
+			font-size: 13px;
+			font-weight: 700;
+			color: var(--muted);
+			user-select: none;
+		}
+
+		.visibility-switch input {
+			width: 18px;
+			height: 18px;
+			accent-color: var(--accent);
+		}
+
+		.button-row button {
+			width: auto;
+			min-width: 140px;
+			border-radius: var(--radius);
+			border: 1px solid rgba(71, 52, 35, 0.14);
+			font: inherit;
+			padding: 14px 18px;
+			cursor: pointer;
+			font-weight: 700;
+			transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+		}
+
+		.primary {
+			background: linear-gradient(135deg, var(--accent) 0%, #d07c2f 100%);
+			color: #fff8f1;
+			border: none;
+			box-shadow: 0 16px 28px rgba(181, 82, 51, 0.28);
+		}
+
+		.secondary {
+			background: rgba(255, 255, 255, 0.7);
+			color: var(--text);
+		}
+
+		.button-row button:hover {
+			transform: translateY(-1px);
+		}
+
+		.button-row button:disabled {
+			opacity: 0.6;
+			cursor: progress;
+			transform: none;
+		}
+
+		.player-panel {
+			padding: 20px;
+			overflow: hidden;
+		}
+
+		.stage {
+			position: relative;
+			aspect-ratio: 16 / 9;
+			overflow: hidden;
+			border-radius: var(--radius);
+			background: #130f0b;
+		}
+
+		.stage::before {
+			content: "";
+			position: absolute;
+			inset: 0;
+			background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 35%);
+			pointer-events: none;
+			z-index: 1;
+		}
+
+		.stage video {
+			width: 100%;
+			height: 100%;
+			object-fit: contain;
+			background: #000;
+		}
+
+		.info-grid {
+			margin-top: 18px;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 14px;
+		}
+
+		.card {
+			background: var(--panel-strong);
+			border: 1px solid var(--line);
+			border-radius: var(--radius);
+			padding: 16px;
+		}
+
+		.card h2 {
+			margin: 0 0 12px;
+			font-size: 15px;
+			letter-spacing: 0.02em;
+		}
+
+		.track-grid {
+			display: grid;
+			gap: 12px;
+		}
+
+		.status {
+			min-height: 52px;
+			padding: 14px 16px;
+			border-radius: var(--radius);
+			background: rgba(255, 255, 255, 0.76);
+			border: 1px solid var(--line);
+			color: var(--muted);
+			line-height: 1.45;
+		}
+
+		.status.success {
+			color: var(--success);
+			border-color: rgba(31, 122, 83, 0.25);
+			background: rgba(31, 122, 83, 0.08);
+		}
+
+		.status.error {
+			color: var(--danger);
+			border-color: rgba(180, 53, 53, 0.24);
+			background: rgba(180, 53, 53, 0.08);
+		}
+
+		.meta-list {
+			margin: 0;
+			padding: 0;
+			list-style: none;
+			display: grid;
+			gap: 10px;
+		}
+
+		.meta-list strong {
+			display: block;
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+			color: var(--muted);
+			margin-bottom: 4px;
+		}
+
+		.meta-value {
+			word-break: break-word;
+			font-family: Consolas, "Courier New", monospace;
+			font-size: 13px;
+		}
+
+		.log-card {
+			grid-column: 1 / -1;
+		}
+
+		.is-hidden {
+			display: none;
+		}
+
+		.log-toolbar {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 12px;
+			margin-bottom: 12px;
+		}
+
+		.log-actions {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+
+		.log-actions button {
+			width: auto;
+			border-radius: var(--radius);
+			border: 1px solid rgba(71, 52, 35, 0.14);
+			background: rgba(255, 255, 255, 0.82);
+			padding: 8px 12px;
+			font: inherit;
+			font-size: 12px;
+			font-weight: 700;
+			cursor: pointer;
+		}
+
+		.log-actions button.primary-toggle {
+			background: linear-gradient(135deg, var(--accent) 0%, #d07c2f 100%);
+			color: #fff8f1;
+			border: none;
+		}
+
+		.log-view {
+			margin: 0;
+			padding: 14px;
+			height: 260px;
+			overflow: auto;
+			border-radius: var(--radius);
+			background: #17120e;
+			color: #f5e8d8;
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			font-family: Consolas, "Courier New", monospace;
+			font-size: 12px;
+			line-height: 1.55;
+			white-space: pre-wrap;
+			word-break: break-word;
+		}
+
+		.log-view:empty::before {
+			content: "Real-time requests, responses, and player events will appear here.";
+			color: rgba(245, 232, 216, 0.6);
+		}
+
+		@media (max-width: 980px) {
+			.shell {
+				grid-template-columns: 1fr;
+			}
+
+			.info-grid,
+			.group.double {
+				grid-template-columns: 1fr;
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<main class="shell">
+		<section class="panel">
+			<h1>Stream Tester</h1>
+			<p class="intro">Load a DASH MPD or HLS M3U8 stream. You can provide ClearKey data as hex key ID and key
+				fields,
+				one or more <code>kid:key</code> pairs, or a JWK payload.</p>
+			<div class="form-grid">
+				<div class="group">
+					<label for="manifestUrl">Stream URL</label>
+					<input id="manifestUrl" type="url" placeholder="https://example.com/path/manifest.mpd or .m3u8" spellcheck="false">
+				</div>
+				<div class="group">
+					<label for="playbackType">Playback Type</label>
+					<select id="playbackType">
+						<option value="auto" selected>Auto Detect</option>
+						<option value="dash">MPEG-DASH (MPD)</option>
+						<option value="hls">HLS (M3U8)</option>
+					</select>
+				</div>
+				<div class="group double">
+					<div class="group">
+						<label for="keyId">ClearKey Key ID</label>
+						<input id="keyId" type="text" placeholder="Hex key ID without separators" spellcheck="false">
+					</div>
+					<div class="group">
+						<label for="key">ClearKey Key</label>
+						<input id="key" type="text" placeholder="Hex content key without separators" spellcheck="false">
+					</div>
+				</div>
+
+				<div class="group">
+					<label for="keyPair">Single Key Pair</label>
+					<input id="keyPair" type="text" placeholder="kid:key" spellcheck="false">
+				</div>
+
+				<div class="group">
+					<label for="keyPairsInput">Multiple Key Pairs</label>
+					<textarea id="keyPairsInput" placeholder="kid1:key1
+kid2:key2" spellcheck="false"></textarea>
+					<p class="hint">Accepts one pair per line or comma-separated pairs.</p>
+				</div>
+
+				<div class="group">
+					<label for="jwkInput">JWK JSON</label>
+					<textarea id="jwkInput" placeholder='{"keys":[{"kty":"oct","kid":"base64url-kid","k":"base64url-key"}],"type":"temporary"}' spellcheck="false"></textarea>
+					<p class="hint">Priority is multi-pair input first, then single <code>kid:key</code>, then explicit
+						hex
+						fields, then JWK. Values are normalized before applying them to Shaka.</p>
+				</div>
+
+				<div class="button-row">
+					<button id="loadButton" class="primary" type="button">Load Stream</button>
+					<button id="resetButton" class="secondary" type="button">Reset</button>
+				</div>
+
+				<label class="visibility-switch" for="showLogsCardToggle">
+					<input id="showLogsCardToggle" type="checkbox">
+					<span>Show Logs</span>
+				</label>
+
+				<div id="statusBox" class="status">Waiting for a manifest URL.</div>
+			</div>
+		</section>
+
+		<section class="player-panel">
+			<div class="stage" id="videoContainer">
+				<video id="video" autoplay playsinline></video>
+			</div>
+
+			<div class="info-grid">
+				<section class="card">
+					<h2>Audio and Subtitles</h2>
+					<div class="track-grid">
+						<div class="group">
+							<label for="audioSelect">Audio Track</label>
+							<select id="audioSelect" disabled>
+								<option value="">Load a stream first</option>
+							</select>
+						</div>
+						<div class="group">
+							<label for="subtitleSelect">Subtitle Track</label>
+							<select id="subtitleSelect" disabled>
+								<option value="">Off</option>
+							</select>
+						</div>
+					</div>
+				</section>
+
+				<section class="card">
+					<h2>Manifest Info</h2>
+					<ul class="meta-list">
+						<li>
+							<strong>Loaded Manifest</strong>
+							<div id="manifestValue" class="meta-value">None</div>
+						</li>
+						<li>
+							<strong>DRM Summary</strong>
+							<div id="drmValue" class="meta-value">No key configured</div>
+						</li>
+						<li>
+							<strong>Active Tracks</strong>
+							<div id="trackValue" class="meta-value">No stream loaded</div>
+						</li>
+					</ul>
+				</section>
+
+				<section id="logsCard" class="card log-card">
+					<div class="log-toolbar">
+						<h2>Real-Time Logs</h2>
+						<div class="log-actions">
+							<button id="toggleLogsButton" class="primary-toggle" type="button">Logs On</button>
+							<button id="clearLogsButton" type="button">Clear Logs</button>
+						</div>
+					</div>
+					<pre id="logOutput" class="log-view"></pre>
+				</section>
+			</div>
+		</section>
+	</main>
+
+	<script src="https://cdn.jsdelivr.net/npm/shaka-player@5.0.6/dist/shaka-player.ui.min.js"></script>
+	<script>
+		const state = {
+			player: null,
+			ui: null,
+			audioTracks: [],
+			textTracks: [],
+			requestTimes: new Map(),
+			logsEnabled: false
+		};
+
+		const elements = {
+			manifestUrl: document.getElementById("manifestUrl"),
+			playbackType: document.getElementById("playbackType"),
+			keyId: document.getElementById("keyId"),
+			key: document.getElementById("key"),
+			keyPairsInput: document.getElementById("keyPairsInput"),
+			keyPair: document.getElementById("keyPair"),
+			jwkInput: document.getElementById("jwkInput"),
+			loadButton: document.getElementById("loadButton"),
+			resetButton: document.getElementById("resetButton"),
+			showLogsCardToggle: document.getElementById("showLogsCardToggle"),
+			toggleLogsButton: document.getElementById("toggleLogsButton"),
+			clearLogsButton: document.getElementById("clearLogsButton"),
+			audioSelect: document.getElementById("audioSelect"),
+			subtitleSelect: document.getElementById("subtitleSelect"),
+			statusBox: document.getElementById("statusBox"),
+			logOutput: document.getElementById("logOutput"),
+			manifestValue: document.getElementById("manifestValue"),
+			drmValue: document.getElementById("drmValue"),
+			trackValue: document.getElementById("trackValue"),
+			logsCard: document.getElementById("logsCard"),
+			video: document.getElementById("video"),
+			videoContainer: document.getElementById("videoContainer")
+		};
+
+		function setStatus(message, tone) {
+			elements.statusBox.textContent = message;
+			elements.statusBox.className = "status";
+			if (tone) {
+				elements.statusBox.classList.add(tone);
+			}
+		}
+
+		function appendLog(message) {
+			if (!state.logsEnabled) {
+				return;
+			}
+
+			const timestamp = new Date().toLocaleTimeString();
+			const line = `[${timestamp}] ${message}`;
+			if (elements.logOutput.textContent) {
+				elements.logOutput.textContent += `\n${line}`;
+			} else {
+				elements.logOutput.textContent = line;
+			}
+
+			const lines = elements.logOutput.textContent.split("\n");
+			if (lines.length > 250) {
+				elements.logOutput.textContent = lines.slice(lines.length - 250).join("\n");
+			}
+
+			elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
+		}
+
+		function clearLogs() {
+			elements.logOutput.textContent = "";
+		}
+
+		function setLogsEnabled(enabled) {
+			state.logsEnabled = Boolean(enabled);
+			elements.toggleLogsButton.textContent = state.logsEnabled ? "Logs Off" : "Logs On";
+		}
+
+		function setLogsCardVisible(visible) {
+			const isVisible = Boolean(visible);
+			elements.logsCard.classList.toggle("is-hidden", !isVisible);
+			elements.showLogsCardToggle.checked = isVisible;
+			if (!isVisible) {
+				setLogsEnabled(false);
+			}
+		}
+
+		function getRequestTypeName(type) {
+			const requestTypes = shaka.net && shaka.net.NetworkingEngine && shaka.net.NetworkingEngine.RequestType;
+			if (!requestTypes) {
+				return String(type);
+			}
+
+			for (const [name, value] of Object.entries(requestTypes)) {
+				if (value === type) {
+					return name;
+				}
+			}
+
+			return String(type);
+		}
+
+		function formatUri(uri) {
+			if (!uri) {
+				return "unknown-uri";
+			}
+
+			try {
+				const parsed = new URL(uri);
+				return `${parsed.origin}${parsed.pathname}`;
+			} catch {
+				return uri;
+			}
+		}
+
+		function formatHeaders(headers) {
+			if (!headers || typeof headers !== "object") {
+				return "no-headers";
+			}
+
+			const entries = Object.entries(headers)
+				.filter(([key, value]) => key && value !== undefined && value !== null && String(value).length)
+				.slice(0, 6)
+				.map(([key, value]) => `${key}=${String(value).slice(0, 120)}`);
+
+			return entries.length ? entries.join(" | ") : "no-headers";
+		}
+
+		function getPayloadSize(payload) {
+			if (!payload) {
+				return "";
+			}
+
+			if (typeof payload.byteLength === "number") {
+				return `${payload.byteLength} bytes`;
+			}
+
+			if (typeof payload.length === "number") {
+				return `${payload.length} bytes`;
+			}
+
+			return "";
+		}
+
+		function resolvePlayback(manifestUrl, selectedType) {
+			const choice = selectedType || "auto";
+			if (choice === "dash") {
+				return { name: "MPEG-DASH", mimeType: "application/dash+xml" };
+			}
+
+			if (choice === "hls") {
+				return { name: "HLS", mimeType: "application/x-mpegurl" };
+			}
+
+			const normalizedUrl = manifestUrl.toLowerCase();
+			if (normalizedUrl.includes(".m3u8")) {
+				return { name: "HLS", mimeType: "application/x-mpegurl" };
+			}
+
+			if (normalizedUrl.includes(".mpd")) {
+				return { name: "MPEG-DASH", mimeType: "application/dash+xml" };
+			}
+
+			return { name: "Auto", mimeType: "" };
+		}
+
+		function toHex(bytes) {
+			return Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+		}
+
+		function fromBase64Url(input) {
+			const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+			const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+			const decoded = atob(padded);
+			const bytes = new Uint8Array(decoded.length);
+			for (let index = 0; index < decoded.length; index += 1) {
+				bytes[index] = decoded.charCodeAt(index);
+			}
+			return bytes;
+		}
+
+		function normalizeHex(value) {
+			return value.replace(/[^a-fA-F0-9]/g, "").toLowerCase();
+		}
+
+		function parseJwk(jsonText) {
+			const payload = JSON.parse(jsonText);
+			const entry = Array.isArray(payload.keys) ? payload.keys[0] : payload;
+			if (!entry || !entry.kid || !entry.k) {
+				throw new Error("JWK must contain both kid and k values.");
+			}
+
+			return {
+				kid: toHex(fromBase64Url(entry.kid)),
+				key: toHex(fromBase64Url(entry.k))
+			};
+		}
+
+		function parseKeyPairEntries(input) {
+			const entries = input
+				.split(/[\r\n,]+/)
+				.map(value => value.trim())
+				.filter(Boolean);
+
+			if (!entries.length) {
+				throw new Error("Key pair input is empty.");
+			}
+
+			const clearKeys = {};
+			for (const entry of entries) {
+				const segments = entry.split(":");
+				if (segments.length !== 2) {
+					throw new Error("Each key pair must be formatted as kid:key.");
+				}
+
+				const kid = normalizeHex(segments[0]);
+				const key = normalizeHex(segments[1]);
+				if (!kid || !key) {
+					throw new Error("One of the key pairs contains an empty key ID or key.");
+				}
+
+				clearKeys[kid] = key;
+			}
+
+			return clearKeys;
+		}
+
+		function resolveClearKeys() {
+			const multiPairInput = elements.keyPairsInput.value.trim();
+			if (multiPairInput) {
+				return { clearKeys: parseKeyPairEntries(multiPairInput), source: "pairs" };
+			}
+
+			const pair = elements.keyPair.value.trim();
+			if (pair) {
+				return { clearKeys: parseKeyPairEntries(pair), source: "pair" };
+			}
+
+			const explicitKid = normalizeHex(elements.keyId.value.trim());
+			const explicitKey = normalizeHex(elements.key.value.trim());
+			if (explicitKid || explicitKey) {
+				if (!explicitKid || !explicitKey) {
+					throw new Error("Both ClearKey Key ID and ClearKey Key are required.");
+				}
+
+				return { clearKeys: { [explicitKid]: explicitKey }, source: "hex" };
+			}
+
+			const jwk = elements.jwkInput.value.trim();
+			if (jwk) {
+				const resolved = parseJwk(jwk);
+				return { clearKeys: { [resolved.kid]: resolved.key }, source: "jwk" };
+			}
+
+			return null;
+		}
+
+		function describeLanguage(track) {
+			const language = track.language || "und";
+			const roleText = Array.isArray(track.roles) && track.roles.length ? ` | ${track.roles.join(", ")}` : "";
+			const channelCount = track.channelsCount ? ` | ${track.channelsCount}ch` : "";
+			const label = track.label ? ` | ${track.label}` : "";
+			return `${language}${roleText}${channelCount}${label}`;
+		}
+
+		function describeTextTrack(track) {
+			const language = track.language || "und";
+			const label = track.label ? ` | ${track.label}` : "";
+			const kind = track.kind ? ` | ${track.kind}` : "";
+			return `${language}${label}${kind}`;
+		}
+
+		function updateTrackSummary() {
+			if (!state.player) {
+				elements.trackValue.textContent = "No stream loaded";
+				return;
+			}
+
+			const activeAudio = state.player.getVariantTracks().find(track => track.active);
+			const activeText = state.player.getTextTracks().find(track => track.active);
+			const audioLabel = activeAudio ? describeLanguage(activeAudio) : "Audio not selected";
+			const subtitleLabel = activeText ? describeTextTrack(activeText) : "Subtitles off";
+			elements.trackValue.textContent = `Audio: ${audioLabel} | Subtitles: ${subtitleLabel}`;
+		}
+
+		function populateTrackSelectors() {
+			if (!state.player) {
+				return;
+			}
+
+			state.audioTracks = state.player.getVariantTracks();
+			state.textTracks = state.player.getTextTracks();
+
+			elements.audioSelect.innerHTML = "";
+			if (state.audioTracks.length === 0) {
+				elements.audioSelect.innerHTML = "<option value=''>No alternate audio";
+				elements.audioSelect.disabled = true;
+			} else {
+				state.audioTracks.forEach(track => {
+					const option = document.createElement("option");
+					option.value = String(track.id);
+					option.textContent = describeLanguage(track);
+					option.selected = Boolean(track.active);
+					elements.audioSelect.appendChild(option);
+				});
+				elements.audioSelect.disabled = false;
+			}
+
+			elements.subtitleSelect.innerHTML = "";
+			const offOption = document.createElement("option");
+			offOption.value = "off";
+			offOption.textContent = "Off";
+			elements.subtitleSelect.appendChild(offOption);
+
+			if (state.textTracks.length === 0) {
+				elements.subtitleSelect.disabled = true;
+			} else {
+				state.textTracks.forEach(track => {
+					const option = document.createElement("option");
+					option.value = String(track.id);
+					option.textContent = describeTextTrack(track);
+					option.selected = Boolean(track.active);
+					elements.subtitleSelect.appendChild(option);
+				});
+				elements.subtitleSelect.disabled = false;
+				const activeText = state.textTracks.find(track => track.active);
+				elements.subtitleSelect.value = activeText ? String(activeText.id) : "off";
+			}
+
+			updateTrackSummary();
+		}
+
+		async function initializePlayer() {
+			shaka.polyfill.installAll();
+			if (!shaka.Player.isBrowserSupported()) {
+				throw new Error("This browser does not support Shaka Player.");
+			}
+
+			const player = new shaka.Player(elements.video);
+			const ui = new shaka.ui.Overlay(player, elements.videoContainer, elements.video);
+			ui.configure({
+				addSeekBar: true,
+				controlPanelElements: [
+					"play_pause",
+					"time_and_duration",
+					"spacer",
+					"mute",
+					"volume",
+					"fullscreen",
+					"overflow_menu"
+				],
+				overflowMenuButtons: [
+					"captions",
+					"language",
+					"quality",
+					"playback_rate",
+					"picture_in_picture"
+				]
+			});
+
+			const controls = ui.getControls();
+			const networkingEngine = player.getNetworkingEngine();
+			elements.video.controls = false;
+			controls.setEnabledNativeControls(false);
+			controls.setEnabledShakaControls(true);
+			appendLog("Player initialized. Waiting for manifest load.");
+
+			if (networkingEngine) {
+				networkingEngine.registerRequestFilter((type, request) => {
+					const uri = Array.isArray(request.uris) && request.uris.length ? request.uris[0] : "unknown-uri";
+					const method = request.method || "GET";
+					const bodySize = getPayloadSize(request.body);
+					state.requestTimes.set(uri, performance.now());
+					appendLog(`REQ  ${getRequestTypeName(type)}  ${method}${bodySize ? `  ${bodySize}` : ""}  ${formatUri(uri)}`);
+					appendLog(`NET  request headers  ${formatHeaders(request.headers)}`);
+				});
+
+				networkingEngine.registerResponseFilter((type, response) => {
+					const uri = response && (response.uri || response.originalUri) ? (response.uri || response.originalUri) : "unknown-uri";
+					const startedAt = state.requestTimes.get(uri);
+					const elapsed = startedAt ? `  ${Math.round(performance.now() - startedAt)}ms` : "";
+					const status = response && response.headers && (response.headers[":status"] || response.headers.status) ? (response.headers[":status"] || response.headers.status) : "ok";
+					const byteLength = response && response.data && typeof response.data.byteLength === "number" ? `  ${response.data.byteLength} bytes` : "";
+					appendLog(`RESP ${getRequestTypeName(type)}  ${status}${elapsed}${byteLength}  ${formatUri(uri)}`);
+					appendLog(`NET  response headers  ${formatHeaders(response && response.headers)}`);
+					state.requestTimes.delete(uri);
+				});
+			}
+
+			window.addEventListener("online", () => {
+				appendLog("NET  browser online");
+			});
+
+			window.addEventListener("offline", () => {
+				appendLog("NET  browser offline");
+			});
+
+			player.addEventListener("error", event => {
+				const detail = event.detail || {};
+				const code = detail.code ? ` (${detail.code})` : "";
+				appendLog(`ERR  ${detail.code || "unknown"}  ${detail.message || "Unknown playback error."}`);
+				setStatus(`Player error${code}: ${detail.message || "Unknown playback error."}`, "error");
+			});
+
+			["trackschanged", "adaptation", "variantchanged", "textchanged", "texttrackvisibility"].forEach(eventName => {
+				player.addEventListener(eventName, () => {
+					appendLog(`EVT  ${eventName}`);
+					populateTrackSelectors();
+				});
+			});
+
+			["loading", "loaded", "streaming", "buffering"].forEach(eventName => {
+				player.addEventListener(eventName, event => {
+					if (eventName === "buffering" && event && typeof event.buffering === "boolean") {
+						appendLog(`EVT  buffering ${event.buffering ? "start" : "end"}`);
+						return;
+					}
+					appendLog(`EVT  ${eventName}`);
+				});
+			});
+
+			["downloadheadersreceived", "downloadcompleted", "downloadfailed", "retry"].forEach(eventName => {
+				player.addEventListener(eventName, event => {
+					const detail = event || {};
+					if (eventName === "downloadheadersreceived") {
+						appendLog(`NET  headers received  ${formatUri(detail.url || detail.uri)}  ${formatHeaders(detail.headers)}`);
+						return;
+					}
+
+					if (eventName === "downloadcompleted") {
+						appendLog(`NET  download completed  ${formatUri(detail.url || detail.uri)}  ${detail.requestType || "unknown"}`);
+						return;
+					}
+
+					if (eventName === "downloadfailed") {
+						appendLog(`NET  download failed  ${formatUri(detail.url || detail.uri)}  ${detail.error || detail.code || "unknown"}`);
+						return;
+					}
+
+					if (eventName === "retry") {
+						appendLog(`NET  retry  ${formatUri(detail.url || detail.uri)}  attempt ${detail.attempt || "?"}`);
+					}
+				});
+			});
+
+			state.player = player;
+			state.ui = ui;
+		}
+
+		async function loadManifest() {
+			const manifestUrl = elements.manifestUrl.value.trim();
+			if (!manifestUrl) {
+				setStatus("Enter a stream URL before loading.", "error");
+				elements.manifestUrl.focus();
+				return;
+			}
+
+			elements.loadButton.disabled = true;
+
+			try {
+				appendLog("Starting manifest load.");
+				const playback = resolvePlayback(manifestUrl, elements.playbackType.value);
+				appendLog(`TYPE ${playback.name}${playback.mimeType ? ` (${playback.mimeType})` : ""}`);
+				const resolvedKeys = resolveClearKeys();
+				state.player.configure({ drm: { clearKeys: {} } });
+
+				if (resolvedKeys) {
+					state.player.configure({
+						drm: {
+							clearKeys: resolvedKeys.clearKeys
+						}
+					});
+					const summary = Object.entries(resolvedKeys.clearKeys)
+						.map(([kid, key]) => `${kid}:${key}`)
+						.join(" | ");
+					appendLog(`DRM  clearkey ${resolvedKeys.source} ${summary}`);
+					elements.drmValue.textContent = `${summary} (${resolvedKeys.source})`;
+				} else {
+					appendLog("DRM  none");
+					elements.drmValue.textContent = "No ClearKey supplied";
+				}
+
+				setStatus("Loading manifest...", null);
+				await state.player.load(manifestUrl, null, playback.mimeType || undefined);
+				appendLog(`LOAD success ${formatUri(manifestUrl)}`);
+				elements.manifestValue.textContent = `${manifestUrl} (${playback.name})`;
+				populateTrackSelectors();
+				setStatus("Manifest loaded. Audio and subtitle selectors are ready.", "success");
+			} catch (error) {
+				const message = error && error.message ? error.message : String(error);
+				appendLog(`LOAD failed ${message}`);
+				setStatus(`Failed to load stream: ${message}`, "error");
+			} finally {
+				elements.loadButton.disabled = false;
+			}
+		}
+
+		function applyAudioTrack(trackId) {
+			const selected = state.audioTracks.find(track => String(track.id) === trackId);
+			if (!selected || !state.player) {
+				return;
+			}
+
+			state.player.selectVariantTrack(selected, true);
+			appendLog(`AUDIO ${describeLanguage(selected)}`);
+			updateTrackSummary();
+		}
+
+		function applySubtitleTrack(trackId) {
+			if (!state.player) {
+				return;
+			}
+
+			if (trackId === "off") {
+				state.player.setTextTrackVisibility(false);
+				appendLog("TEXT  off");
+				updateTrackSummary();
+				return;
+			}
+
+			const selected = state.textTracks.find(track => String(track.id) === trackId);
+			if (!selected) {
+				return;
+			}
+
+			state.player.selectTextTrack(selected);
+			state.player.setTextTrackVisibility(true);
+			appendLog(`TEXT  ${describeTextTrack(selected)}`);
+			updateTrackSummary();
+		}
+
+		function resetForm() {
+			elements.manifestUrl.value = "";
+			elements.playbackType.value = "auto";
+			elements.keyId.value = "";
+			elements.key.value = "";
+			elements.keyPairsInput.value = "";
+			elements.keyPair.value = "";
+			elements.jwkInput.value = "";
+			elements.audioSelect.innerHTML = "<option value=''>Load a stream first";
+			elements.audioSelect.disabled = true;
+			elements.subtitleSelect.innerHTML = "<option value=''>Off";
+			elements.subtitleSelect.disabled = true;
+			elements.manifestValue.textContent = "None";
+			elements.drmValue.textContent = "No key configured";
+			elements.trackValue.textContent = "No stream loaded";
+			clearLogs();
+			setStatus("Waiting for a manifest URL.", null);
+		}
+
+		elements.loadButton.addEventListener("click", loadManifest);
+		elements.resetButton.addEventListener("click", resetForm);
+		elements.showLogsCardToggle.addEventListener("change", event => {
+			setLogsCardVisible(event.target.checked);
+		});
+		elements.toggleLogsButton.addEventListener("click", () => {
+			const enabled = !state.logsEnabled;
+			setLogsEnabled(enabled);
+			if (enabled) {
+				appendLog("Log capture enabled.");
+			}
+		});
+		elements.clearLogsButton.addEventListener("click", clearLogs);
+		elements.audioSelect.addEventListener("change", event => applyAudioTrack(event.target.value));
+		elements.subtitleSelect.addEventListener("change", event => applySubtitleTrack(event.target.value));
+		elements.manifestUrl.addEventListener("keydown", event => {
+			if (event.key === "Enter") {
+				loadManifest();
+			}
+		});
+
+		initializePlayer()
+			.then(() => {
+				setLogsCardVisible(false);
+				setLogsEnabled(false);
+				setStatus("Player ready. Add a manifest URL and ClearKey data, then load the stream.", null);
+			})
+			.catch(error => {
+				const message = error && error.message ? error.message : String(error);
+				setStatus(`Initialization failed: ${message}`, "error");
+				elements.loadButton.disabled = true;
+			});
+
+
+	</script>
+</body>
+</html>
